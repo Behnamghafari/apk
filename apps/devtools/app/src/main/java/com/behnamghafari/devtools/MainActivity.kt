@@ -83,15 +83,6 @@ class MainActivity : Activity() {
   browserArea.addView(panel,LinearLayout.LayoutParams(-1,dp(panelHeight)))
   root.addView(browserArea,LinearLayout.LayoutParams(-1,0,1f))
 
-  val bottomBar=LinearLayout(this).apply{
-   orientation=LinearLayout.HORIZONTAL
-   gravity=Gravity.CENTER
-   setPadding(dp(8),dp(4),dp(8),dp(4))
-   setBackgroundColor(0xff111c30.toInt())
-  }
-  bottomBar.addView(devButton,LinearLayout.LayoutParams(-1,dp(44)))
-  root.addView(bottomBar,LinearLayout.LayoutParams(-1,dp(52)))
-
   setContentView(root)
   panel.loadUrl("file:///android_asset/devtools.html")
   site.loadUrl(tabUrls[0])
@@ -119,7 +110,7 @@ class MainActivity : Activity() {
  }
  private fun loadAddress(){var u=address.text.toString().trim();if(u.isEmpty())return;if(!u.contains("://"))u=if(u.contains(".")&&!u.contains(" "))"https://$u" else "https://www.google.com/search?q="+android.net.Uri.encode(u);site.loadUrl(u)}
  private fun toggleDevTools(){if(apiFullscreen){exitApiFullscreen()};devOpen=!devOpen;panel.visibility=if(devOpen)View.VISIBLE else View.GONE;handle.visibility=if(devOpen)View.VISIBLE else View.GONE;devButton.text=if(devOpen)"✕ CLOSE" else "🛠 DEVTOOLS";site.visibility=View.VISIBLE}
- private fun showMenu(){val p=android.widget.PopupMenu(this,menuButton);p.menu.add("API Tester").setOnMenuItemClickListener{openApiFullscreen();true};p.menu.add("Reload page").setOnMenuItemClickListener{site.reload();true};p.menu.add("Back").setOnMenuItemClickListener{if(site.canGoBack())site.goBack();true};p.menu.add("Forward").setOnMenuItemClickListener{if(site.canGoForward())site.goForward();true};p.menu.add("Home").setOnMenuItemClickListener{site.loadUrl("https://www.google.com");true};p.show()}
+ private fun showMenu(){val p=android.widget.PopupMenu(this,menuButton);p.menu.add("DevTools").setOnMenuItemClickListener{if(apiFullscreen)exitApiFullscreen()else toggleDevTools();true};p.menu.add("API Tester").setOnMenuItemClickListener{openApiFullscreen();true};p.menu.add("Reload page").setOnMenuItemClickListener{site.reload();true};p.menu.add("Back").setOnMenuItemClickListener{if(site.canGoBack())site.goBack();true};p.menu.add("Forward").setOnMenuItemClickListener{if(site.canGoForward())site.goForward();true};p.menu.add("Home").setOnMenuItemClickListener{site.loadUrl("https://www.google.com");true};p.show()}
  private fun openApiFullscreen(){apiFullscreen=true;devOpen=false;site.visibility=View.GONE;handle.visibility=View.GONE;panel.visibility=View.VISIBLE;panel.layoutParams=LinearLayout.LayoutParams(-1,0,1f);devButton.text="BROWSER";panel.evaluateJavascript("window.DevToolsUI&&window.DevToolsUI.openApi()",null)}
  private fun exitApiFullscreen(){apiFullscreen=false;panel.layoutParams=LinearLayout.LayoutParams(-1,dp(panelHeight));site.visibility=View.VISIBLE;devOpen=false;panel.visibility=View.GONE;handle.visibility=View.GONE;devButton.text="🛠 DEVTOOLS"}
  private fun inject(){
