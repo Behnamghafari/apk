@@ -5,6 +5,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.webkit.*
 import android.widget.Toast
+import androidx.core.view.WindowCompat
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -25,6 +26,7 @@ class MainActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, true)
         window.statusBarColor = android.graphics.Color.rgb(11, 17, 32)
         window.navigationBarColor = android.graphics.Color.rgb(11, 17, 32)
         web = WebView(this).apply {
