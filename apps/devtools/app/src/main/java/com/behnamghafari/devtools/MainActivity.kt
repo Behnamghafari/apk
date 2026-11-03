@@ -45,7 +45,6 @@ class MainActivity : Activity() {
   menuButton=Button(this).apply{text="⋮";textSize=20f;setPadding(4,0,4,0);setOnClickListener{showMenu()}}
   toolbar.addView(address,LinearLayout.LayoutParams(0,40,1f))
   toolbar.addView(go,LinearLayout.LayoutParams(42,40))
-  toolbar.addView(menuButton,LinearLayout.LayoutParams(38,40))
   root.addView(toolbar,LinearLayout.LayoutParams(-1,48))
 
   tabBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(4,2,4,2);setBackgroundColor(0xff172338.toInt())}
@@ -97,6 +96,7 @@ class MainActivity : Activity() {
    tabBar.addView(b,LinearLayout.LayoutParams(0,dp(32),1f))
   }
   tabBar.addView(Button(this).apply{text="+";textSize=20f;setPadding(0,0,0,0);setOnClickListener{newTab()}},LinearLayout.LayoutParams(dp(42),dp(32)))
+  tabBar.addView(menuButton,LinearLayout.LayoutParams(dp(42),dp(32)))
  }
  private fun newTab(){
   if(tabUrls.isNotEmpty())tabUrls[activeTab]=site.url?:tabUrls[activeTab]
