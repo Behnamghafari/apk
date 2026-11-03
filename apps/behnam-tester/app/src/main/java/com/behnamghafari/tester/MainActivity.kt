@@ -77,7 +77,8 @@ class MainActivity : Activity() {
                     }
                     val start = System.currentTimeMillis()
                     val req = builder.method(method, if (method in listOf("GET", "HEAD")) null else requestBody).build()
-                    client.newCall(req).execute().use { response ->
+                    val requestClient = client.newBuilder().callTimeout(data.optLong("timeout", 60L).coerceIn(5L, 300L), TimeUnit.SECONDS).build()
+                    requestClient.newCall(req).execute().use { response ->
                         val responseHeaders = JSONObject()
                         response.headers.names().sorted().forEach { key ->
                             responseHeaders.put(key, response.headers.values(key).joinToString(", "))
