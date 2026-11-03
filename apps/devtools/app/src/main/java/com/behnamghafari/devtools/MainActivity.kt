@@ -26,7 +26,10 @@ class MainActivity : Activity() {
  private lateinit var menuButton: Button
  private var devOpen=false
  private var apiFullscreen=false
- private var panelHeight=280
+ private var panelHeight=240
+ private val tabUrls=mutableListOf<String>()
+ private var activeTab=0
+ private lateinit var tabBar: LinearLayout
  private var dragStartY=0f
  private var dragStartHeight=0
  private val http=OkHttpClient.Builder().connectTimeout(30,TimeUnit.SECONDS).readTimeout(60,TimeUnit.SECONDS).build()
@@ -36,16 +39,20 @@ class MainActivity : Activity() {
   super.onCreate(savedInstanceState)
   root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(0xff0f172a.toInt())}
   val toolbar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(5,5,5,5);setBackgroundColor(0xff111c30.toInt())}
-  devButton=Button(this).apply{text="⚙ DEVTOOLS";textSize=10f;isAllCaps=false;setTextColor(0xffffffff.toInt());backgroundTintList=android.content.res.ColorStateList.valueOf(0xff2563eb.toInt());setPadding(5,0,5,0);contentDescription="Open or close DevTools panel";setOnClickListener{if(apiFullscreen)exitApiFullscreen()else toggleDevTools()}}
+  devButton=Button(this).apply{text="🛠 DEVTOOLS";textSize=11f;isAllCaps=false;setTextColor(0xffffffff.toInt());backgroundTintList=android.content.res.ColorStateList.valueOf(0xff1d4ed8.toInt());setPadding(3,0,3,0);contentDescription="Open or close DevTools panel";setOnClickListener{if(apiFullscreen)exitApiFullscreen()else toggleDevTools()}}
   address=EditText(this).apply{setSingleLine(true);textSize=13f;hint="Search or enter website";setTextColor(0xfff1f5f9.toInt());setHintTextColor(0xff94a3b8.toInt());setPadding(10,0,10,0);setBackgroundColor(0xff1e293b.toInt());imeOptions=android.view.inputmethod.EditorInfo.IME_ACTION_GO;setOnEditorActionListener{_,_,_->loadAddress();true}}
   val go=Button(this).apply{text="GO";textSize=11f;setPadding(5,0,5,0);setOnClickListener{loadAddress()}}
   menuButton=Button(this).apply{text="⋮";textSize=20f;setPadding(4,0,4,0);setOnClickListener{showMenu()}}
-  toolbar.addView(devButton,LinearLayout.LayoutParams(104,48))
-  toolbar.addView(address,LinearLayout.LayoutParams(0,48,1f))
-  toolbar.addView(go,LinearLayout.LayoutParams(48,48))
-  toolbar.addView(menuButton,LinearLayout.LayoutParams(44,48))
-  root.addView(toolbar,LinearLayout.LayoutParams(-1,58))
+  toolbar.addView(devButton,LinearLayout.LayoutParams(116,40))
+  toolbar.addView(address,LinearLayout.LayoutParams(0,40,1f))
+  toolbar.addView(go,LinearLayout.LayoutParams(42,40))
+  toolbar.addView(menuButton,LinearLayout.LayoutParams(38,40))
+  root.addView(toolbar,LinearLayout.LayoutParams(-1,48))
 
+  tabBar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(4,2,4,2);setBackgroundColor(0xff172338.toInt())}
+  root.addView(tabBar,LinearLayout.LayoutParams(-1,dp(38)))
+  tabUrls.add("https://www.google.com")
+  renderTabs()
   browserArea=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
   site=WebView(this).apply{
    settings.javaScriptEnabled=true;settings.domStorageEnabled=true;settings.databaseEnabled=true
@@ -53,7 +60,7 @@ class MainActivity : Activity() {
    addJavascriptInterface(SiteBridge(),"DevToolsBridge")
    webViewClient=object:WebViewClient(){
     override fun onPageStarted(v:WebView,url:String,favicon:android.graphics.Bitmap?){address.setText(url)}
-    override fun onPageFinished(v:WebView,url:String){address.setText(url);inject();emit("navigation",JSONObject().put("url",url))}
+    override fun onPageFinished(v:WebView,url:String){address.setText(url);if(v===site&&tabUrls.isNotEmpty())tabUrls[activeTab]=url;renderTabs();inject();emit("navigation",JSONObject().put("url",url))}
     override fun shouldInterceptRequest(v:WebView,r:WebResourceRequest):WebResourceResponse?{
      val h=JSONObject();r.requestHeaders.forEach{(k,x)->h.put(k,x)}
      emit("network",JSONObject().put("url",r.url.toString()).put("method",r.method).put("headers",h).put("source","webview"))
@@ -78,14 +85,34 @@ class MainActivity : Activity() {
   root.addView(browserArea,LinearLayout.LayoutParams(-1,0,1f))
   setContentView(root)
   panel.loadUrl("file:///android_asset/devtools.html")
-  site.loadUrl("https://www.google.com")
+  site.loadUrl(tabUrls[0])
  }
  private fun dp(v:Int)= (v*resources.displayMetrics.density).toInt()
+ private fun renderTabs(){
+  if(!::tabBar.isInitialized)return
+  tabBar.removeAllViews()
+  tabUrls.forEachIndexed{index,url->
+   val label=try{android.net.Uri.parse(url).host?.removePrefix("www.")?: "New tab"}catch(_:Exception){"New tab"}
+   val b=Button(this).apply{text="\${index+1}. $label";textSize=10f;isAllCaps=false;setPadding(5,0,5,0);backgroundTintList=android.content.res.ColorStateList.valueOf(if(index==activeTab)0xff2563eb.toInt() else 0xff334155.toInt());setTextColor(-1);setOnClickListener{switchTab(index)}}
+   tabBar.addView(b,LinearLayout.LayoutParams(0,dp(32),1f))
+  }
+  tabBar.addView(Button(this).apply{text="+";textSize=20f;setPadding(0,0,0,0);setOnClickListener{newTab()}},LinearLayout.LayoutParams(dp(42),dp(32)))
+ }
+ private fun newTab(){
+  if(tabUrls.isNotEmpty())tabUrls[activeTab]=site.url?:tabUrls[activeTab]
+  tabUrls.add("https://www.google.com");activeTab=tabUrls.lastIndex
+  site.loadUrl(tabUrls[activeTab]);renderTabs()
+ }
+ private fun switchTab(index:Int){
+  if(index !in tabUrls.indices||index==activeTab)return
+  site.url?.let{if(tabUrls.isNotEmpty())tabUrls[activeTab]=it}
+  activeTab=index;address.setText(tabUrls[index]);site.loadUrl(tabUrls[index]);renderTabs()
+ }
  private fun loadAddress(){var u=address.text.toString().trim();if(u.isEmpty())return;if(!u.contains("://"))u=if(u.contains(".")&&!u.contains(" "))"https://$u" else "https://www.google.com/search?q="+android.net.Uri.encode(u);site.loadUrl(u)}
- private fun toggleDevTools(){if(apiFullscreen){exitApiFullscreen()};devOpen=!devOpen;panel.visibility=if(devOpen)View.VISIBLE else View.GONE;handle.visibility=if(devOpen)View.VISIBLE else View.GONE;devButton.text=if(devOpen)"CLOSE" else "DEV";site.visibility=View.VISIBLE}
+ private fun toggleDevTools(){if(apiFullscreen){exitApiFullscreen()};devOpen=!devOpen;panel.visibility=if(devOpen)View.VISIBLE else View.GONE;handle.visibility=if(devOpen)View.VISIBLE else View.GONE;devButton.text=if(devOpen)"✕ CLOSE" else "🛠 DEVTOOLS";site.visibility=View.VISIBLE}
  private fun showMenu(){val p=android.widget.PopupMenu(this,menuButton);p.menu.add("API Tester").setOnMenuItemClickListener{openApiFullscreen();true};p.menu.add("Reload page").setOnMenuItemClickListener{site.reload();true};p.menu.add("Back").setOnMenuItemClickListener{if(site.canGoBack())site.goBack();true};p.menu.add("Forward").setOnMenuItemClickListener{if(site.canGoForward())site.goForward();true};p.menu.add("Home").setOnMenuItemClickListener{site.loadUrl("https://www.google.com");true};p.show()}
  private fun openApiFullscreen(){apiFullscreen=true;devOpen=false;site.visibility=View.GONE;handle.visibility=View.GONE;panel.visibility=View.VISIBLE;panel.layoutParams=LinearLayout.LayoutParams(-1,0,1f);devButton.text="BROWSER";panel.evaluateJavascript("window.DevToolsUI&&window.DevToolsUI.openApi()",null)}
- private fun exitApiFullscreen(){apiFullscreen=false;panel.layoutParams=LinearLayout.LayoutParams(-1,dp(panelHeight));site.visibility=View.VISIBLE;devOpen=false;panel.visibility=View.GONE;handle.visibility=View.GONE;devButton.text="DEV"}
+ private fun exitApiFullscreen(){apiFullscreen=false;panel.layoutParams=LinearLayout.LayoutParams(-1,dp(panelHeight));site.visibility=View.VISIBLE;devOpen=false;panel.visibility=View.GONE;handle.visibility=View.GONE;devButton.text="🛠 DEVTOOLS"}
  private fun inject(){
   val js="""(function(){if(window.__dt)return;window.__dt=true;const send=(k,d)=>{try{DevToolsBridge.postEvent(k,JSON.stringify(d))}catch(e){}};
   const f=fetch;window.fetch=function(i,o){const u=typeof i==='string'?i:i.url,m=(o&&o.method)||(i&&i.method)||'GET',h={};try{new Headers((o&&o.headers)||(i&&i.headers)||{}).forEach((v,k)=>h[k]=v)}catch(e){}send('network',{url:u,method:m,headers:h,source:'fetch',phase:'request'});let t=Date.now();return f.apply(this,arguments).then(r=>{let rh={};r.headers.forEach((v,k)=>rh[k]=v);send('network',{url:u,method:m,status:r.status,responseHeaders:rh,duration:Date.now()-t,source:'fetch',phase:'response'});return r}).catch(e=>{send('network',{url:u,method:m,error:String(e),source:'fetch'});throw e})};
