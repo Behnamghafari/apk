@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
         ))
 
         val icon = TextView(this).apply {
-            text = "✂"
+            text = "▣"
             textSize = 54f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(217, 179, 108))
@@ -96,7 +96,7 @@ class MainActivity : ComponentActivity() {
         content.addView(icon, centeredParams())
 
         val title = TextView(this).apply {
-            text = "سالن من"
+            text = "نوبت من"
             textSize = 27f
             gravity = Gravity.CENTER
             setTextColor(Color.rgb(23, 36, 58))
@@ -187,7 +187,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val brand = TextView(this).apply {
-            text = "✂  سالن من"
+            text = "▣  نوبت من"
             textSize = 17f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
