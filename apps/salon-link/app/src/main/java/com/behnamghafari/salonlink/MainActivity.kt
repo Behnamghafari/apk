@@ -3,6 +3,7 @@ package com.behnamghafari.salonlink
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.graphics.Color
+import java.io.File
 import android.net.Uri
 import android.os.Bundle
 import android.os.Build
@@ -25,10 +26,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : ComponentActivity() {
-    private val preferences by lazy {
-        getSharedPreferences("salon_link_settings", MODE_PRIVATE)
-    }
-
     private lateinit var root: LinearLayout
     private var webView: WebView? = null
     private var addressInput: EditText? = null
@@ -38,7 +35,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        savedAddress = preferences.getString(KEY_ADDRESS, null)
+        savedAddress = runCatching {
+            File(cacheDir, ADDRESS_FILE).takeIf { it.exists() }?.readText()?.trim()
+        }.getOrNull()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.rgb(23, 36, 58)
         window.navigationBarColor = Color.rgb(23, 36, 58)
@@ -147,14 +146,6 @@ class MainActivity : ComponentActivity() {
         ).apply { topMargin = dp(16) }
         content.addView(saveButton, buttonParams)
 
-        if (!savedAddress.isNullOrBlank()) {
-            val cancel = Button(this).apply {
-                text = "بازگشت به سایت"
-                isAllCaps = false
-                setOnClickListener { showWebsite(savedAddress!!) }
-            }
-            content.addView(cancel, centeredParams())
-        }
     }
 
     private fun saveAddressAndOpen() {
@@ -174,7 +165,12 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        preferences.edit().putString(KEY_ADDRESS, normalized).apply()
+        runCatching {
+            File(cacheDir, ADDRESS_FILE).writeText(normalized)
+        }.onFailure {
+            addressInput?.error = "ذخیره آدرس انجام نشد"
+            return
+        }
         savedAddress = normalized
         showWebsite(normalized)
     }
@@ -198,17 +194,6 @@ class MainActivity : ComponentActivity() {
         }
         toolbar.addView(brand, LinearLayout.LayoutParams(0, dp(48), 1f))
 
-        val changeButton = Button(this).apply {
-            text = "تغییر آدرس"
-            textSize = 12f
-            isAllCaps = false
-            setTextColor(Color.WHITE)
-            backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(63, 78, 101))
-            setOnClickListener { showAddressForm() }
-        }
-        toolbar.addView(changeButton, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(42)
-        ))
         root.addView(toolbar)
 
         progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -282,6 +267,6 @@ class MainActivity : ComponentActivity() {
         (value * resources.displayMetrics.density).toInt()
 
     companion object {
-        private const val KEY_ADDRESS = "website_address"
+        private const val ADDRESS_FILE = "salon_website_address.txt"
     }
 }
