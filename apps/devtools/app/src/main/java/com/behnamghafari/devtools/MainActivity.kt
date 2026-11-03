@@ -43,7 +43,6 @@ class MainActivity : Activity() {
   address=EditText(this).apply{setSingleLine(true);textSize=13f;hint="Search or enter website";setTextColor(0xfff1f5f9.toInt());setHintTextColor(0xff94a3b8.toInt());setPadding(10,0,10,0);setBackgroundColor(0xff1e293b.toInt());imeOptions=android.view.inputmethod.EditorInfo.IME_ACTION_GO;setOnEditorActionListener{_,_,_->loadAddress();true}}
   val go=Button(this).apply{text="GO";textSize=11f;setPadding(5,0,5,0);setOnClickListener{loadAddress()}}
   menuButton=Button(this).apply{text="⋮";textSize=20f;setPadding(4,0,4,0);setOnClickListener{showMenu()}}
-  toolbar.addView(devButton,LinearLayout.LayoutParams(116,40))
   toolbar.addView(address,LinearLayout.LayoutParams(0,40,1f))
   toolbar.addView(go,LinearLayout.LayoutParams(42,40))
   toolbar.addView(menuButton,LinearLayout.LayoutParams(38,40))
@@ -83,6 +82,16 @@ class MainActivity : Activity() {
   panel.visibility=View.GONE
   browserArea.addView(panel,LinearLayout.LayoutParams(-1,dp(panelHeight)))
   root.addView(browserArea,LinearLayout.LayoutParams(-1,0,1f))
+
+  val bottomBar=LinearLayout(this).apply{
+   orientation=LinearLayout.HORIZONTAL
+   gravity=Gravity.CENTER
+   setPadding(dp(8),dp(4),dp(8),dp(4))
+   setBackgroundColor(0xff111c30.toInt())
+  }
+  bottomBar.addView(devButton,LinearLayout.LayoutParams(-1,dp(44)))
+  root.addView(bottomBar,LinearLayout.LayoutParams(-1,dp(52)))
+
   setContentView(root)
   panel.loadUrl("file:///android_asset/devtools.html")
   site.loadUrl(tabUrls[0])
