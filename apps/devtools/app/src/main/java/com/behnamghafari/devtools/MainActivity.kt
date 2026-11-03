@@ -37,7 +37,7 @@ class MainActivity : Activity() {
   root=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(0xff0f172a.toInt())}
   val toolbar=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(5,5,5,5);setBackgroundColor(0xff111c30.toInt())}
   devButton=Button(this).apply{text="DEV";textSize=11f;setPadding(8,0,8,0);setOnClickListener{if(apiFullscreen)exitApiFullscreen()else toggleDevTools()}}
-  address=EditText(this).apply{singleLine=true;textSize=13f;hint="Search or enter website";setTextColor(0xfff1f5f9.toInt());setHintTextColor(0xff94a3b8.toInt());setPadding(10,0,10,0);setBackgroundColor(0xff1e293b.toInt());imeOptions=android.view.inputmethod.EditorInfo.IME_ACTION_GO;setOnEditorActionListener{_,_,_->loadAddress();true}}
+  address=EditText(this).apply{setSingleLine(true);textSize=13f;hint="Search or enter website";setTextColor(0xfff1f5f9.toInt());setHintTextColor(0xff94a3b8.toInt());setPadding(10,0,10,0);setBackgroundColor(0xff1e293b.toInt());imeOptions=android.view.inputmethod.EditorInfo.IME_ACTION_GO;setOnEditorActionListener{_,_,_->loadAddress();true}}
   val go=Button(this).apply{text="GO";textSize=11f;setPadding(5,0,5,0);setOnClickListener{loadAddress()}}
   menuButton=Button(this).apply{text="⋮";textSize=20f;setPadding(4,0,4,0);setOnClickListener{showMenu()}}
   toolbar.addView(devButton,LinearLayout.LayoutParams(52,48))
