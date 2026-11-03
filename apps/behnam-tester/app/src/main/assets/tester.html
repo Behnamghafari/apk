@@ -80,6 +80,34 @@ function copyText(s){const ta=document.createElement('textarea');ta.value=s;docu
 function copyResponse(){if(lastResponse)copyText(lastResponse.body||JSON.stringify(lastResponse,null,2))}
 function downloadResponse(){if(!lastResponse)return;const blob=new Blob([lastResponse.body||''],{type:'text/plain'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='response.txt';a.click();URL.revokeObjectURL(a.href)}
 function back(){if(currentPage!=='request')goPage('request');else if($('textModal').classList.contains('open')||$('aboutModal').classList.contains('open'))closeModal()}
+function seedSamples(){
+ let fs=store.get('folders',[]),c=store.get('collections',[]);
+ if(fs.some(f=>f.id==='samples_jsonplaceholder'))return;
+ fs.push({id:'samples_jsonplaceholder',name:'JSONPlaceholder · REST API'},{id:'samples_http',name:'HTTP · Authorization · Cookies'});
+ const add=(folderId,name,method,url,bodyMode='none',body='',auth='none',authValues={},headers=[])=>c.push({id:'sample_'+Math.random().toString(36).slice(2),folderId,name,req:{method,url,params:[],headers:[{key:'Accept',value:'application/json',enabled:true},...headers],auth,authValues,bodyMode,body,contentType:'application/json',form:[],pre:'',test:"pm.test('Status is returned', () => pm.expect(pm.response.code).to.be.true);",timeout:'30',description:'نمونه آماده',env:''}});
+ const b='https://jsonplaceholder.typicode.com';
+ add('samples_jsonplaceholder','همه پست‌ها · GET','GET',b+'/posts');
+ add('samples_jsonplaceholder','پست شماره 1 · GET','GET',b+'/posts/1');
+ add('samples_jsonplaceholder','فیلتر پست‌های کاربر · GET','GET',b+'/posts?userId=1');
+ add('samples_jsonplaceholder','کامنت‌های پست · GET','GET',b+'/comments?postId=1');
+ add('samples_jsonplaceholder','آلبوم‌ها · GET','GET',b+'/albums');
+ add('samples_jsonplaceholder','تصاویر آلبوم · GET','GET',b+'/photos?albumId=1');
+ add('samples_jsonplaceholder','کاربران · GET','GET',b+'/users');
+ add('samples_jsonplaceholder','Todo های کاربر · GET','GET',b+'/todos?userId=1');
+ add('samples_jsonplaceholder','ساخت پست · POST','POST',b+'/posts','json',JSON.stringify({title:'Behnam Tester',body:'POST sample request',userId:1},null,2));
+ add('samples_jsonplaceholder','جایگزینی پست · PUT','PUT',b+'/posts/1','json',JSON.stringify({id:1,title:'Updated title',body:'Updated body',userId:1},null,2));
+ add('samples_jsonplaceholder','ویرایش جزئی پست · PATCH','PATCH',b+'/posts/1','json',JSON.stringify({title:'Patched title'},null,2));
+ add('samples_jsonplaceholder','حذف پست · DELETE','DELETE',b+'/posts/1');
+ add('samples_jsonplaceholder','ساخت کامنت · POST','POST',b+'/comments','json',JSON.stringify({postId:1,name:'Behnam',email:'behnam@example.com',body:'Sample comment'},null,2));
+ add('samples_jsonplaceholder','ساخت Todo · POST','POST',b+'/todos','json',JSON.stringify({userId:1,title:'Test API',completed:false},null,2));
+ add('samples_http','نمایش هدرهای درخواست','GET','https://httpbin.org/headers');
+ add('samples_http','تست Authorization Bearer','GET','https://httpbin.org/bearer','none','','bearer',{bearerToken:'demo-token'});
+ add('samples_http','تست ارسال Cookie header','GET','https://httpbin.org/cookies','none','','none',{},[{key:'Cookie',value:'session=behnam-tester; theme=dark',enabled:true}]);
+ add('samples_http','تست Set-Cookie در پاسخ','GET','https://httpbin.org/cookies/set?tester=behnam&mode=api');
+ add('samples_http','پاسخ 404 برای تست خطا','GET','https://httpbin.org/status/404');
+ add('samples_http','درخواست با تأخیر 2 ثانیه','GET','https://httpbin.org/delay/2');
+ store.set('folders',fs);store.set('collections',c);
+}
 function init(){seedSamples();setRows('paramsRows',[]);setRows('headerRows',[{key:'Accept',value:'application/json'},{key:'Content-Type',value:'application/json'}]);setRows('formRows',[]);renderAuth();renderHistory();renderCollections();renderEnvironments();$('collectionsPage').classList.add('hide');$('environmentsPage').classList.add('hide');$('historyPage').classList.add('hide');$('pendingId').value=''}
 window.BehnamTester={onResult,back};document.addEventListener('DOMContentLoaded',init);
 </script>
