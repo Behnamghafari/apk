@@ -1,11 +1,11 @@
 package com.behnamghafari.salonlink
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.app.AlertDialog
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -18,11 +18,13 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
     private val preferences by lazy {
         getSharedPreferences("salon_link_settings", MODE_PRIVATE)
     }
@@ -51,6 +53,17 @@ class MainActivity : Activity() {
             insets
         }
         setContentView(root)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val browser = webView
+                if (browser != null && browser.canGoBack()) {
+                    browser.goBack()
+                } else {
+                    confirmExit()
+                }
+            }
+        })
 
         if (savedAddress.isNullOrBlank()) {
             showAddressForm()
@@ -216,7 +229,9 @@ class MainActivity : Activity() {
         browser.settings.allowFileAccess = false
         browser.settings.allowContentAccess = false
         browser.settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-        browser.settings.safeBrowsingEnabled = true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            browser.settings.safeBrowsingEnabled = true
+        }
         browser.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
                 view: WebView,
@@ -238,14 +253,7 @@ class MainActivity : Activity() {
         browser.loadUrl(address)
     }
 
-    @Deprecated("Deprecated by Android; retained for the system back key.")
-    override fun onBackPressed() {
-        val browser = webView
-        if (browser != null && browser.canGoBack()) {
-            browser.goBack()
-            return
-        }
-
+    private fun confirmExit() {
         AlertDialog.Builder(this)
             .setTitle("خروج از برنامه")
             .setMessage("می‌خوای از برنامه خارج بشی؟")
