@@ -1,6 +1,6 @@
 # ApiX
 
-**ApiX 1.6.0** is an Android API client for developers, built with Kotlin, OkHttp and a local HTML interface.
+**ApiX 1.7.0** is an Android API client for developers, built with Kotlin, OkHttp and a local HTML interface.
 
 ## Features
 - REST API, GraphQL and WebSocket clients
@@ -11,7 +11,9 @@
 - Response search with matching line previews
 - JSON formatting, validation and response diff
 - Request history and saved collections
-- Collection runner with sequential execution and JSON reports
+- Collection runner with sequential execution, detailed JSON reports and local run history
+- Compare consecutive test runs to identify regressions, fixes, status changes and timing changes
+- Extended assertions: HTTP status/header checks, deep equality, property, type, length, range and response-time assertions
 - Request chaining inside a collection using `{{prev.access_token}}`, `{{prev.status}}` and `{{prev.raw}}`
 - Collection JSON export and import
 - Named environments, global variables and `{{variable}}` interpolation
