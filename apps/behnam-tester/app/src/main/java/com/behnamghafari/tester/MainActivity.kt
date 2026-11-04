@@ -244,9 +244,9 @@ class MainActivity : Activity() {
                                 responseBody = route.optString("body", "{}")
                                 val headers = route.optJSONObject("headers")
                                 if (headers != null) for (key in headers.keys()) {
-                                    val safeKey = key.replace("\\r", "").replace("\\n", "")
-                                    val safeValue = headers.optString(key).replace("\\r", "").replace("\\n", "")
-                                    extraHeaders += "$safeKey: $safeValue\\r\\n"
+                                    val safeKey = key.replace("\r", "").replace("\n", "")
+                                    val safeValue = headers.optString(key).replace("\r", "").replace("\n", "")
+                                    extraHeaders += "$safeKey: $safeValue\r\n"
                                 }
                                 break
                             }
@@ -255,7 +255,7 @@ class MainActivity : Activity() {
                     val bytes = responseBody.toByteArray(Charsets.UTF_8)
                     val reason = when (status) { 200 -> "OK"; 201 -> "Created"; 400 -> "Bad Request"; 401 -> "Unauthorized"; 403 -> "Forbidden"; 404 -> "Not Found"; 500 -> "Internal Server Error"; else -> "Mock" }
                     val output = s.getOutputStream()
-                    output.write("HTTP/1.1 $status $reason\\r\\nContent-Type: $contentType\\r\\nContent-Length: \${bytes.size}\\r\\nConnection: close\\r\\n$extraHeaders\\r\\n".toByteArray(Charsets.UTF_8))
+                    output.write("HTTP/1.1 $status $reason\r\nContent-Type: $contentType\r\nContent-Length: " + bytes.size + "\r\nConnection: close\r\n$extraHeaders\r\n".toByteArray(Charsets.UTF_8))
                     output.write(bytes); output.flush()
                 } catch (_: Exception) { }
             }
@@ -314,7 +314,7 @@ class MainActivity : Activity() {
                             contentType.contains("xml", true) || contentType.contains("javascript", true) ||
                             contentType.contains("x-www-form-urlencoded", true) || contentType.isBlank()
                         val responseBody = if (isText) String(bytes, Charsets.UTF_8) else "[Binary response: ${bytes.size} bytes]"
-                        val displayBody = if (truncated) responseBody + "\\n\\n[Response truncated at 5 MB]" else responseBody
+                        val displayBody = if (truncated) responseBody + "\n\n[Response truncated at 5 MB]" else responseBody
                         val result = JSONObject()
                             .put("id", id).put("ok", response.isSuccessful).put("status", response.code)
                             .put("statusText", response.message).put("duration", System.currentTimeMillis() - start)
@@ -408,7 +408,7 @@ class MainActivity : Activity() {
                         val result = JSONObject().put("id", id).put("ok", response.isSuccessful).put("status", response.code)
                             .put("statusText", response.message).put("duration", System.currentTimeMillis() - start)
                             .put("size", bytes.size).put("headers", responseHeaders)
-                            .put("body", if (truncated) body + "\\n\\n[Response truncated at 5 MB]" else body)
+                            .put("body", if (truncated) body + "\n\n[Response truncated at 5 MB]" else body)
                             .put("contentType", contentType).put("truncated", truncated).put("finalUrl", response.request.url.toString())
                         deliverUpload(result)
                     }
