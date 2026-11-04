@@ -392,7 +392,29 @@ function parseSimpleYaml(src){const lines=src.split(/\r?\n/).map(s=>({n:s.search
 function generateCurl(){try{const r=buildRequest();let s='curl -X '+r.method+' '+JSON.stringify(r.url);r.headers.forEach(h=>s+=' \\\n  -H '+JSON.stringify(h.key+': '+h.value));if(r.body)s+=' \\\n  --data-raw '+JSON.stringify(r.body);copyText(s)}catch(e){BehnamNative.toast(e.message)}}
 function formatBody(){try{$('bodyText').value=JSON.stringify(JSON.parse($('bodyText').value),null,2);validateBody()}catch(e){$('jsonValidation').textContent='✕ '+e.message;$('jsonValidation').className='tiny bad'}}
 function validateBody(){try{const value=JSON.parse($('bodyText').value);$('jsonValidation').textContent='✓ JSON معتبر · '+(Array.isArray(value)?'Array':value===null?'Null':typeof value);$('jsonValidation').className='tiny good'}catch(e){$('jsonValidation').textContent='✕ '+e.message;$('jsonValidation').className='tiny bad'}}
-function renderResponseDiff(){const el=$('responseDiff');if(!previousResponse||!lastResponse){el.textContent='برای مقایسه، ابتدا دو پاسخ دریافت کن.';return}const a=String(previousResponse.body||'').split('\\n'),b=String(lastResponse.body||'').split('\\n'),out=[];for(let i=0;i<Math.max(a.length,b.length);i++){if(a[i]===b[i])out.push('  '+(a[i]??''));else{if(a[i]!==undefined)out.push('- '+a[i]);if(b[i]!==undefined)out.push('+ '+b[i])}}el.textContent=out.join('\\n')||'بدون تغییر'}
+function renderResponseDiff(){
+ const el=$('responseDiff'),summary=$('responseDiffSummary');
+ if(!previousResponse||!lastResponse){el.textContent='برای مقایسه، ابتدا دو پاسخ دریافت کن.';if(summary)summary.textContent='برای مقایسه، ابتدا دو پاسخ دریافت کن.';return}
+ const changes=[];let added=0,removed=0,modified=0;
+ const show=v=>{let t;try{t=JSON.stringify(v)}catch(e){t=String(v)}return String(t).slice(0,200)};
+ let oldJson,newJson,valid=false;
+ try{oldJson=JSON.parse(previousResponse.body||'null');newJson=JSON.parse(lastResponse.body||'null');valid=oldJson!==null&&newJson!==null&&typeof oldJson==='object'&&typeof newJson==='object'}catch(e){}
+ if(valid){
+  const walk=(x,y,path,depth)=>{
+   if(changes.length>=1000||depth>20||JSON.stringify(x)===JSON.stringify(y))return;
+   if(x&&y&&typeof x==='object'&&typeof y==='object'&&Array.isArray(x)===Array.isArray(y)){
+    const keys=new Set([...Object.keys(x),...Object.keys(y)]);
+    for(const key of keys){const p=Array.isArray(x)?path+'['+key+']':(path?path+'.':'')+key;const hasX=Object.prototype.hasOwnProperty.call(x,key),hasY=Object.prototype.hasOwnProperty.call(y,key);if(!hasX){added++;changes.push('+ '+p+': '+show(y[key]))}else if(!hasY){removed++;changes.push('- '+p+': '+show(x[key]))}else walk(x[key],y[key],p,depth+1)}
+   }else{modified++;changes.push('~ '+(path||'$')+': '+show(x)+' -> '+show(y))}
+  };
+  walk(oldJson,newJson,'$',0);
+ }else{
+  const x=String(previousResponse.body||'').split('\n'),y=String(lastResponse.body||'').split('\n');
+  for(let i=0;i<Math.max(x.length,y.length)&&changes.length<1000;i++){if(x[i]===y[i])continue;if(x[i]!==undefined){removed++;changes.push('- '+x[i])}if(y[i]!==undefined){added++;changes.push('+ '+y[i])}}
+ }
+ if(summary)summary.textContent='قبل: '+(previousResponse.status??'ERR')+' / '+(previousResponse.duration||0)+' ms    بعد: '+(lastResponse.status??'ERR')+' / '+(lastResponse.duration||0)+' ms\nافزوده: '+added+' · حذف: '+removed+' · تغییر: '+modified;
+ el.textContent=changes.join('\n')||'بدون تغییر در بدنه پاسخ';
+}
 function copyText(s){try{if(window.BehnamNative&&BehnamNative.copyText){BehnamNative.copyText(String(s));return}}catch(e){}const ta=document.createElement('textarea');ta.value=String(s);ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();BehnamNative.toast(ok?'کپی شد':'کپی انجام نشد')}
 function copyResponse(){if(lastResponse)copyText(lastResponse.body||JSON.stringify(lastResponse,null,2))}
 function downloadResponse(){if(!lastResponse)return;const blob=new Blob([lastResponse.body||''],{type:'text/plain'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='response.txt';a.click();URL.revokeObjectURL(a.href)}
