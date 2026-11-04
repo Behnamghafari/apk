@@ -116,12 +116,22 @@ class MainActivity : Activity() {
         }
         @JavascriptInterface fun openTelegram() {
             runOnUiThread {
-                val telegramIntent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=behnamghafari"))
-                try {
-                    startActivity(telegramIntent)
-                } catch (_: Exception) {
+                val profileUrl = Uri.parse("https://t.me/behnamghafari")
+                val telegramPackages = listOf("org.telegram.messenger", "org.thunderdog.challegram")
+                var opened = false
+                for (packageName in telegramPackages) {
                     try {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/behnamghafari")))
+                        val intent = Intent(Intent.ACTION_VIEW, profileUrl).setPackage(packageName)
+                        startActivity(intent)
+                        opened = true
+                        break
+                    } catch (_: Exception) {
+                        // Try another installed Telegram client, then the default browser.
+                    }
+                }
+                if (!opened) {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, profileUrl))
                     } catch (_: Exception) {
                         Toast.makeText(this@MainActivity, "تلگرام یا مرورگر در دسترس نیست", Toast.LENGTH_SHORT).show()
                     }
