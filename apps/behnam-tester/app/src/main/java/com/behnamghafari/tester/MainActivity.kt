@@ -17,6 +17,14 @@ import okio.source
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.net.ServerSocket
+import java.net.InetAddress
+import java.net.Socket
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -24,6 +32,8 @@ class MainActivity : Activity() {
     private val uploadRequestCode = 4812
     private lateinit var cookieJar: PersistentCookieJar
     private lateinit var client: OkHttpClient
+    @Volatile private var mockServer: ServerSocket? = null
+    @Volatile private var mockRoutes = JSONArray()
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,6 +73,194 @@ class MainActivity : Activity() {
     }
 
     inner class Bridge {
+
+        @JavascriptInterface fun runLoadTest(raw: String) {
+            Thread {
+                val result = JSONObject()
+                try {
+                    val data = JSONObject(raw)
+                    val url = data.getString("url").trim()
+                    require(url.startsWith("http://") || url.startsWith("https://")) { "URL معتبر نیست" }
+                    val method = data.optString("method", "GET").uppercase()
+                    require(method in listOf("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD")) { "متد پشتیبانی نمی‌شود" }
+                    val total = data.optInt("total", 30).coerceIn(1, 500)
+                    val concurrency = data.optInt("concurrency", 5).coerceIn(1, 20).coerceAtMost(total)
+                    val headers = data.optJSONArray("headers") ?: JSONArray()
+                    val body = data.optString("body", "")
+                    val contentType = data.optString("contentType", "application/json")
+                    val pool = Executors.newFixedThreadPool(concurrency)
+                    val latch = CountDownLatch(total)
+                    val durations = ConcurrentLinkedQueue<Long>()
+                    val statuses = ConcurrentLinkedQueue<Int>()
+                    val errors = ConcurrentLinkedQueue<String>()
+                    val started = System.nanoTime()
+                    repeat(total) {
+                        pool.execute {
+                            val tick = System.nanoTime()
+                            try {
+                                val builder = Request.Builder().url(url)
+                                for (i in 0 until headers.length()) {
+                                    val h = headers.optJSONObject(i) ?: continue
+                                    val key = h.optString("key").trim()
+                                    if (key.isNotEmpty()) builder.addHeader(key, h.optString("value"))
+                                }
+                                val requestBody = if (method in listOf("POST", "PUT", "PATCH"))
+                                    body.toRequestBody(contentType.toMediaTypeOrNull()) else null
+                                val req = builder.method(method, requestBody).build()
+                                client.newBuilder().callTimeout(30, TimeUnit.SECONDS).build().newCall(req).execute().use { response ->
+                                    statuses.add(response.code)
+                                    response.body?.close()
+                                }
+                            } catch (e: Exception) { errors.add(e.message ?: e.javaClass.simpleName) }
+                            finally {
+                                durations.add(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - tick))
+                                latch.countDown()
+                            }
+                        }
+                    }
+                    latch.await(180, TimeUnit.SECONDS)
+                    pool.shutdownNow()
+                    val elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started).coerceAtLeast(1)
+                    val sorted = durations.toList().sorted()
+                    val success = statuses.count { it in 200..399 }
+                    val failed = total - statuses.size
+                    val avg = if (sorted.isEmpty()) 0L else sorted.average().toLong()
+                    result.put("total", total).put("completed", durations.size).put("success", success)
+                        .put("httpErrors", statuses.size - success).put("networkErrors", failed)
+                        .put("avg", avg).put("min", sorted.firstOrNull() ?: 0L)
+                        .put("max", sorted.lastOrNull() ?: 0L)
+                        .put("p95", if (sorted.isEmpty()) 0L else sorted[((sorted.size - 1) * 0.95).toInt()])
+                        .put("elapsed", elapsed).put("rps", statuses.size * 1000.0 / elapsed)
+                        .put("statuses", JSONArray(statuses.toList()))
+                        .put("errors", JSONArray(errors.toList().take(10)))
+                } catch (e: Exception) { result.put("error", e.message ?: "Load test failed") }
+                runOnUiThread { if (::web.isInitialized) web.evaluateJavascript(
+                    "window.BehnamTester && window.BehnamTester.onLoadTestResult(" + JSONObject.quote(result.toString()) + ")", null
+                ) }
+            }.start()
+        }
+
+        @JavascriptInterface fun runSecurityAudit(raw: String) {
+            Thread {
+                val result = JSONObject()
+                try {
+                    val url = JSONObject(raw).getString("url").trim()
+                    require(url.startsWith("http://") || url.startsWith("https://")) { "URL معتبر نیست" }
+                    client.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+                        val headers = response.headers
+                        val checks = JSONArray()
+                        fun check(name: String, ok: Boolean, detail: String) {
+                            checks.put(JSONObject().put("name", name).put("ok", ok).put("detail", detail))
+                        }
+                        val https = response.request.url.isHttps
+                        check("HTTPS", https, if (https) "ارتباط نهایی با HTTPS برقرار شد" else "آدرس نهایی HTTPS نیست")
+                        check("Strict-Transport-Security", !https || headers["Strict-Transport-Security"] != null, headers["Strict-Transport-Security"] ?: "هدر HSTS وجود ندارد")
+                        check("X-Content-Type-Options", headers["X-Content-Type-Options"]?.equals("nosniff", true) == true, headers["X-Content-Type-Options"] ?: "هدر وجود ندارد")
+                        check("X-Frame-Options", headers["X-Frame-Options"] != null || headers["Content-Security-Policy"]?.contains("frame-ancestors", true) == true, headers["X-Frame-Options"] ?: headers["Content-Security-Policy"] ?: "هدر محافظت در برابر Clickjacking وجود ندارد")
+                        check("Content-Security-Policy", headers["Content-Security-Policy"] != null, headers["Content-Security-Policy"] ?: "هدر CSP وجود ندارد")
+                        check("Referrer-Policy", headers["Referrer-Policy"] != null, headers["Referrer-Policy"] ?: "هدر وجود ندارد")
+                        check("Permissions-Policy", headers["Permissions-Policy"] != null, headers["Permissions-Policy"] ?: "هدر وجود ندارد")
+                        val server = headers["Server"]
+                        check("Server disclosure", server.isNullOrBlank(), server ?: "هدر Server افشا نشده")
+                        val powered = headers["X-Powered-By"]
+                        check("Technology disclosure", powered.isNullOrBlank(), powered ?: "هدر X-Powered-By افشا نشده")
+                        val cors = headers["Access-Control-Allow-Origin"]
+                        check("CORS wildcard", cors != "*", cors ?: "هدر Access-Control-Allow-Origin ارسال نشده")
+                        val cookie = headers.values("Set-Cookie").joinToString(";")
+                        check("Cookie flags", cookie.isBlank() || (cookie.contains("secure", true) && cookie.contains("httponly", true)), if (cookie.isBlank()) "کوکی در پاسخ تنظیم نشد" else cookie)
+                        result.put("status", response.code).put("finalUrl", response.request.url.toString())
+                            .put("checks", checks).put("passed", (0 until checks.length()).count { checks.getJSONObject(it).optBoolean("ok") })
+                            .put("failed", (0 until checks.length()).count { !checks.getJSONObject(it).optBoolean("ok") })
+                    }
+                } catch (e: Exception) { result.put("error", e.message ?: "Security audit failed") }
+                runOnUiThread { if (::web.isInitialized) web.evaluateJavascript(
+                    "window.BehnamTester && window.BehnamTester.onSecurityAuditResult(" + JSONObject.quote(result.toString()) + ")", null
+                ) }
+            }.start()
+        }
+
+        @JavascriptInterface fun startMockServer(raw: String): String {
+            return try {
+                val routes = JSONArray(raw)
+                require(routes.length() in 1..100) { "تعداد مسیرها باید بین ۱ تا ۱۰۰ باشد" }
+                stopMockServer()
+                mockRoutes = routes
+                val socket = ServerSocket(8787, 32, InetAddress.getByName("127.0.0.1"))
+                mockServer = socket
+                Thread {
+                    while (!socket.isClosed) {
+                        try {
+                            val clientSocket = socket.accept()
+                            Thread { serveMockRequest(clientSocket) }.start()
+                        } catch (_: Exception) { if (!socket.isClosed) continue }
+                    }
+                }.start()
+                JSONObject().put("ok", true).put("url", "http://127.0.0.1:8787").toString()
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: "خطا در راه‌اندازی Mock Server").toString()
+            }
+        }
+
+        @JavascriptInterface fun stopMockServer() {
+            try { mockServer?.close() } catch (_: Exception) { }
+            mockServer = null
+        }
+
+        @JavascriptInterface fun mockServerStatus(): Boolean = mockServer?.isBound == true && mockServer?.isClosed == false
+
+        private fun serveMockRequest(socket: Socket) {
+            socket.use { s ->
+                try {
+                    s.soTimeout = 5000
+                    val reader = BufferedReader(InputStreamReader(s.getInputStream(), Charsets.UTF_8))
+                    val first = reader.readLine() ?: return
+                    val parts = first.split(" ")
+                    val method = parts.getOrNull(0)?.uppercase() ?: "GET"
+                    val path = parts.getOrNull(1)?.substringBefore("?") ?: "/"
+                    var length = 0
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        if (line.isEmpty()) break
+                        if (line.startsWith("Content-Length:", true)) length = line.substringAfter(":").trim().toIntOrNull() ?: 0
+                    }
+                    val body = StringBuilder()
+                    repeat(length.coerceIn(0, 1024 * 1024)) {
+                        val ch = reader.read()
+                        if (ch >= 0) body.append(ch.toChar())
+                    }
+                    var status = 404
+                    var contentType = "application/json; charset=utf-8"
+                    var responseBody = JSONObject().put("error", "Mock route not found").put("path", path).toString()
+                    var extraHeaders = ""
+                    if (path == "/mock/echo" && method == "POST") {
+                        status = 200
+                        responseBody = JSONObject().put("method", method).put("path", path).put("body", body.toString()).toString()
+                    } else {
+                        for (i in 0 until mockRoutes.length()) {
+                            val route = mockRoutes.optJSONObject(i) ?: continue
+                            if (route.optString("method", "GET").uppercase() == method && route.optString("path") == path) {
+                                status = route.optInt("status", 200).coerceIn(100, 599)
+                                contentType = route.optString("contentType", contentType)
+                                responseBody = route.optString("body", "{}")
+                                val headers = route.optJSONObject("headers")
+                                if (headers != null) for (key in headers.keys()) {
+                                    val safeKey = key.replace("\\r", "").replace("\\n", "")
+                                    val safeValue = headers.optString(key).replace("\\r", "").replace("\\n", "")
+                                    extraHeaders += "$safeKey: $safeValue\\r\\n"
+                                }
+                                break
+                            }
+                        }
+                    }
+                    val bytes = responseBody.toByteArray(Charsets.UTF_8)
+                    val reason = when (status) { 200 -> "OK"; 201 -> "Created"; 400 -> "Bad Request"; 401 -> "Unauthorized"; 403 -> "Forbidden"; 404 -> "Not Found"; 500 -> "Internal Server Error"; else -> "Mock" }
+                    val output = s.getOutputStream()
+                    output.write("HTTP/1.1 $status $reason\\r\\nContent-Type: $contentType\\r\\nContent-Length: \${bytes.size}\\r\\nConnection: close\\r\\n$extraHeaders\\r\\n".toByteArray(Charsets.UTF_8))
+                    output.write(bytes); output.flush()
+                } catch (_: Exception) { }
+            }
+        }
+
         @JavascriptInterface fun sendRequest(raw: String) {
             Thread {
                 val id = try { JSONObject(raw).optString("id") } catch (_: Exception) { "" }
@@ -310,6 +508,7 @@ class MainActivity : Activity() {
         web.evaluateJavascript("window.BehnamTester && window.BehnamTester.back()", null)
     }
     override fun onDestroy() {
+        try { mockServer?.close() } catch (_: Exception) { }
         if (::web.isInitialized) web.destroy()
         super.onDestroy()
     }
