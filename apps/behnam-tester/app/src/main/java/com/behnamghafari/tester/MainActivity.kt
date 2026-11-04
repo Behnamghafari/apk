@@ -37,9 +37,16 @@ class MainActivity : Activity() {
             settings.domStorageEnabled = true
             settings.allowFileAccess = true
             settings.allowContentAccess = false
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            settings.allowFileAccessFromFileURLs = false
+            settings.allowUniversalAccessFromFileURLs = false
             addJavascriptInterface(Bridge(), "BehnamNative")
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val target = request.url
+                    return !(target.scheme == "file" && target.path?.startsWith("/android_asset/") == true)
+                }
+            }
         }
         setContentView(web)
         web.loadUrl("file:///android_asset/tester.html")
