@@ -713,8 +713,8 @@ const scenarioExamples=[
   {name:'دریافت نظرات همان پست',method:'GET',url:'https://jsonplaceholder.typicode.com/posts/{{vars.postId}}/comments',expectStatus:200,save:{commentCount:'length'}}
  ]},
  {id:'scenario_conditional',name:'سناریوی شرطی و استخراج داده',description:'اگر پاسخ مرحله اول ۲۰۰ بود، مرحله دوم اجرا می‌شود؛ در غیر این صورت مرحله دوم رد می‌شود.',steps:[
-  {name:'بررسی سلامت سرویس',method:'GET',url:'https://httpbin.org/status/200',expectStatus:200,save:{healthStatus:'status'}},
-  {name:'مرحله فقط در صورت سلامت',method:'GET',url:'https://httpbin.org/get?health={{vars.healthStatus}}',when:{status:200},expectStatus:200,expectJsonPath:'args.health',expectEquals:'200'}
+  {name:'بررسی سلامت سرویس',method:'GET',url:'https://httpbin.org/get?health=ready',expectStatus:200,save:{healthValue:'args.health'}},
+  {name:'مرحله فقط در صورت سلامت',method:'GET',url:'https://httpbin.org/get?health={{vars.healthValue}}',when:{status:200},expectStatus:200,expectJsonPath:'args.health',expectEquals:'ready'}
  ]}
 ];
 function getScenarios(){const x=store.get('scenarios',null);return Array.isArray(x)?x:[]}
