@@ -9,8 +9,8 @@ android {
         applicationId = "com.behnamghafari.tester"
         minSdk = 23
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.4.1"
+        versionCode = 7
+        versionName = "1.4.2"
     }
     buildTypes { release { isMinifyEnabled = false } }
     compileOptions {
