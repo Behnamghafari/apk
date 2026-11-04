@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit
 
 class MainActivity : Activity() {
     private lateinit var web: WebView
+    private val maxResponseBytes = 5 * 1024 * 1024
     private val client = OkHttpClient.Builder()
         .connectTimeout(45, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
@@ -94,17 +95,25 @@ class MainActivity : Activity() {
                         response.headers.names().sorted().forEach { key ->
                             responseHeaders.put(key, response.headers.values(key).joinToString(", "))
                         }
-                        val bytes = response.body?.bytes() ?: ByteArray(0)
+                        val source = response.body?.source()
+                        val buffer = okio.Buffer()
+                        while (source != null && buffer.size <= maxResponseBytes) {
+                            if (source.read(buffer, 8192L) == -1L) break
+                        }
+                        val truncated = buffer.size > maxResponseBytes
+                        val bytes = buffer.readByteArray(minOf(buffer.size, maxResponseBytes.toLong()))
                         val contentType = response.header("Content-Type") ?: ""
                         val isText = contentType.contains("json", true) || contentType.startsWith("text/", true) ||
                             contentType.contains("xml", true) || contentType.contains("javascript", true) ||
                             contentType.contains("x-www-form-urlencoded", true) || contentType.isBlank()
                         val responseBody = if (isText) String(bytes, Charsets.UTF_8) else "[Binary response: ${bytes.size} bytes]"
+                        val displayBody = if (truncated && isText) responseBody + "\\n\\n[Response truncated at 5 MB]" else responseBody
                         val result = JSONObject()
                             .put("id", id).put("ok", response.isSuccessful).put("status", response.code)
                             .put("statusText", response.message).put("duration", System.currentTimeMillis() - start)
                             .put("size", bytes.size).put("headers", responseHeaders)
-                            .put("body", responseBody).put("contentType", contentType)
+                            .put("body", displayBody).put("contentType", contentType)
+                            .put("truncated", truncated)
                             .put("finalUrl", response.request.url.toString())
                         deliver(result)
                     }
