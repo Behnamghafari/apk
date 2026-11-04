@@ -353,12 +353,13 @@ function seedSamples(){
  add('samples_http','Echo بدنه JSON · POST','POST',t+'/echo','json',JSON.stringify({app:'ApiX',message:'Hello API'},null,2));
  add('samples_http','Bearer Token معتبر · 200','GET',t+'/auth/bearer','none','','bearer',{bearerToken:'apibee-token-123'});
  add('samples_http','دسترسی محدود · 403','GET',t+'/auth/roles/admin','none','','bearer',{bearerToken:'user-token'});
- const addUploadTool=(name,description)=>{if(!c.some(x=>x.folderId==='samples_upload'&&x.name===name))c.push({id:'sample_upload_'+Math.random().toString(36).slice(2,9),folderId:'samples_upload',name,uploadTool:true,req:{method:'POST',url:t+'/echo',description}})};
+ const addUploadTool=(name,description,url=t+'/echo')=>{if(!c.some(x=>x.folderId==='samples_upload'&&x.name===name))c.push({id:'sample_upload_'+Math.random().toString(36).slice(2,9),folderId:'samples_upload',name,uploadTool:true,req:{method:'POST',url,description}})};
  addUploadTool('ارسال یک فایل','یک فایل انتخاب کن و پاسخ سرور را بررسی کن.');
  addUploadTool('ارسال چند فایل','چند فایل انتخاب کن تا نام، نوع و حجم هرکدام بررسی شود.');
  addUploadTool('فایل همراه فیلدهای متنی','فایل را همراه فیلدهای title و description ارسال کن.');
  addUploadTool('ارسال با نام فیلد دلخواه','نام فیلد فایل را از file به image یا document تغییر بده.');
- add('samples_upload','بررسی multipart · POST', 'POST',t+'/bodies/form','none','','none',{},[],'این endpoint داده multipart را تجزیه می‌کند؛ برای ارسال فایل واقعی از ابزار File Upload استفاده کن.');
+ addUploadTool('بررسی multipart و SHA-256','فایل را ارسال کن تا سرور اندازه و هش SHA-256 را برگرداند.',t+'/bodies/form');
+ addUploadTool('آزمایش فایل بزرگ تا ۱۰ مگابایت','برای بررسی آپلود فایل‌های بزرگ‌تر از endpoint اندازه‌گیری استفاده کن.',t+'/bodies/large');
  store.set('folders',fs);store.set('collections',c);
 }
 function init(){seedSamples();setRows('paramsRows',[]);setRows('headerRows',[{key:'Accept',value:'application/json'},{key:'Content-Type',value:'application/json'}]);setRows('formRows',[]);renderAuth();renderHistory();renderCollections();renderEnvironments();$('collectionsPage').classList.add('hide');$('environmentsPage').classList.add('hide');$('historyPage').classList.add('hide');$('toolsPage').classList.add('hide');renderTestRuns();$('pendingId').value=''}
