@@ -162,7 +162,7 @@ function queueWorkspaceSave(){if(workspaceSaveTimer)clearTimeout(workspaceSaveTi
 function persistWorkspaceTabs(){
  if(!activeWorkspaceTabId)return;
  const active=workspaceTabs.find(t=>t.id===activeWorkspaceTabId);
- if(active){active.snapshot=snapshot();active.mode=requestMode}
+ if(active){active.snapshot=snapshot();active.mode=requestMode;active.lastResponse=lastResponse;active.previousResponse=previousResponse}
  store.set('workspaceTabs',workspaceTabs);
 }
 function renderRequestTabs(){
@@ -185,24 +185,34 @@ function initRequestTabs(){
  activeWorkspaceTabId=workspaceTabs[0].id;
  persistWorkspaceTabs();renderRequestTabs();
 }
+function restoreWorkspaceResponse(tab){
+ lastResponse=tab?.lastResponse||null;previousResponse=tab?.previousResponse||null;
+ if(!lastResponse){$('responseStatus').textContent='پاسخ سرور';$('responseMeta').textContent='هنوز درخواستی ارسال نشده';$('responseBody').textContent='پاسخ اینجا نمایش داده می‌شود.';$('responseRaw').textContent='';$('responseHeaders').textContent='';$('responseCookies').textContent='';$('responseDiff').textContent='برای مقایسه، حداقل دو پاسخ دریافت کن.';$('responseDiffSummary').textContent='برای مقایسه، ابتدا دو پاسخ دریافت کن.';return}
+ const r=lastResponse,good=!r.error&&r.status>=200&&r.status<400;
+ $('responseStatus').innerHTML=r.error?'<span class="bad">خطا در اتصال</span>':'<span class="'+(good?'good':'bad')+'">'+r.status+' '+esc(r.statusText)+'</span>';
+ $('responseMeta').textContent=r.error||((r.duration||0)+' ms · '+formatBytes(r.size||0)+' · '+esc(r.contentType||''));
+ renderResponseBody(r.error||r.body||'');$('responseRaw').textContent=r.body||'';
+ $('responseHeaders').textContent=Object.entries(r.headers||{}).map(([k,v])=>k+': '+v).join('\n');
+ $('responseCookies').textContent=r.headers?.['set-cookie']||'کوکی Set-Cookie دریافت نشد';renderResponseDiff();
+}
 function activateRequestTab(id){
  if(id===activeWorkspaceTabId)return;
  persistWorkspaceTabs();
  const tab=workspaceTabs.find(t=>t.id===id);if(!tab)return;
- activeWorkspaceTabId=id;loadSnapshot(tab.snapshot);setMode(tab.mode||tab.snapshot.mode||'rest');renderRequestTabs();store.set('activeWorkspaceTabId',id);
+ activeWorkspaceTabId=id;loadSnapshot(tab.snapshot);setMode(tab.mode||tab.snapshot.mode||'rest');restoreWorkspaceResponse(tab);renderRequestTabs();store.set('activeWorkspaceTabId',id);
 }
 function newRequestTab(){
  persistWorkspaceTabs();
  if(workspaceTabs.length>=12){BehnamNative.toast('حداکثر ۱۲ درخواست را می‌توان هم‌زمان باز نگه داشت');return}
  const req={method:'GET',url:'',params:[],headers:[{key:'Accept',value:'application/json',enabled:true},{key:'Content-Type',value:'application/json',enabled:true}],auth:'none',authValues:{},bodyMode:'none',body:'',contentType:'application/json',form:[],pre:'',test:'',timeout:'60',description:'',env:'',mode:'rest'};
  const tab={id:'tab_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),snapshot:req,mode:'rest'};
- workspaceTabs.push(tab);activeWorkspaceTabId=tab.id;loadSnapshot(req);setMode('rest');store.set('activeWorkspaceTabId',tab.id);persistWorkspaceTabs();renderRequestTabs();
+ workspaceTabs.push(tab);activeWorkspaceTabId=tab.id;lastResponse=null;previousResponse=null;loadSnapshot(req);setMode('rest');restoreWorkspaceResponse(tab);store.set('activeWorkspaceTabId',tab.id);persistWorkspaceTabs();renderRequestTabs();
 }
 function closeRequestTab(id){
  persistWorkspaceTabs();
  const index=workspaceTabs.findIndex(t=>t.id===id);if(index<0)return;
- if(workspaceTabs.length===1){workspaceTabs[0].snapshot={method:'GET',url:'',params:[],headers:[{key:'Accept',value:'application/json',enabled:true},{key:'Content-Type',value:'application/json',enabled:true}],auth:'none',authValues:{},bodyMode:'none',body:'',contentType:'application/json',form:[],pre:'',test:'',timeout:'60',description:'',env:'',mode:'rest'};activeWorkspaceTabId=workspaceTabs[0].id;loadSnapshot(workspaceTabs[0].snapshot);setMode('rest')}
- else{workspaceTabs.splice(index,1);if(activeWorkspaceTabId===id){const next=workspaceTabs[Math.min(index,workspaceTabs.length-1)];activeWorkspaceTabId=next.id;loadSnapshot(next.snapshot);setMode(next.mode||next.snapshot.mode||'rest')}}
+ if(workspaceTabs.length===1){workspaceTabs[0].snapshot={method:'GET',url:'',params:[],headers:[{key:'Accept',value:'application/json',enabled:true},{key:'Content-Type',value:'application/json',enabled:true}],auth:'none',authValues:{},bodyMode:'none',body:'',contentType:'application/json',form:[],pre:'',test:'',timeout:'60',description:'',env:'',mode:'rest'};activeWorkspaceTabId=workspaceTabs[0].id;lastResponse=null;previousResponse=null;loadSnapshot(workspaceTabs[0].snapshot);setMode('rest');restoreWorkspaceResponse(workspaceTabs[0])}
+ else{workspaceTabs.splice(index,1);if(activeWorkspaceTabId===id){const next=workspaceTabs[Math.min(index,workspaceTabs.length-1)];activeWorkspaceTabId=next.id;loadSnapshot(next.snapshot);setMode(next.mode||next.snapshot.mode||'rest');restoreWorkspaceResponse(next)}}
  store.set('activeWorkspaceTabId',activeWorkspaceTabId);persistWorkspaceTabs();renderRequestTabs();
 }
 function snapshot(){return {method:$('method').value,url:$('url').value,params:rows('paramsRows'),headers:rows('headerRows'),auth:$('authType').value,authValues:Object.fromEntries(['bearerToken','basicUser','basicPass','apiKeyName','apiKeyValue','apiKeyPlace'].filter(id=>$(id)).map(id=>[id,$(id).value])),bodyMode,body:$('bodyText').value,contentType:$('contentType').value,form:rows('formRows'),pre:$('preScript').value,test:$('testScript').value,timeout:$('timeout').value,description:$('description').value,env:$('environment').value,mode:requestMode}}
