@@ -139,6 +139,14 @@ class MainActivity : Activity() {
             }
         }
 
+        @JavascriptInterface fun copyText(value: String) {
+            runOnUiThread {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ApiX", value))
+                Toast.makeText(this@MainActivity, "گزارش در کلیپ‌بورد کپی شد", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         @JavascriptInterface fun toast(message: String) {
             runOnUiThread { Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show() }
         }
