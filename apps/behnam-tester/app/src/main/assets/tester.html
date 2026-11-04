@@ -53,6 +53,7 @@ function readApiXRecords(db){return new Promise((resolve,reject)=>{const tx=db.t
 function migrateApiXStorage(db){return new Promise((resolve,reject)=>{const legacy=[];for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith('bt_')){try{legacy.push({key,value:JSON.parse(localStorage.getItem(key))})}catch(e){}}}if(!legacy.length){resolve(0);return}const tx=db.transaction('kv','readwrite'),os=tx.objectStore('kv');legacy.forEach(record=>{if(!storeCache.has(record.key))os.put(record)});tx.oncomplete=()=>{legacy.forEach(record=>localStorage.removeItem(record.key));resolve(legacy.length)};tx.onerror=()=>reject(tx.error||Error('Legacy migration failed'));tx.onabort=()=>reject(tx.error||Error('Legacy migration aborted'))})}
 async function initializeApiXStorage(){try{storeDb=await openApiXDatabase();const records=await readApiXRecords(storeDb);records.forEach(record=>storeCache.set(record.key,record.value));await migrateApiXStorage(storeDb);return 'indexeddb'}catch(e){storeFallback=true;for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith('bt_')){try{storeCache.set(key,JSON.parse(localStorage.getItem(key)))}catch(_){}}}console.warn('ApiX is using local storage fallback',e);return 'localStorage'}}
 let bodyMode='none',lastResponse=null,previousResponse=null,modalCallback=null,currentPage='request',requestMode='rest',wsSocket=null,activeScriptVars={},previousChainData={},responseSearchIndex=0;
+let workspaceTabs=[],activeWorkspaceTabId=null;
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function addKV(id,key='',value='',enabled=true){const row=document.createElement('div');row.className='kv';row.innerHTML='<input class="check" type="checkbox" '+(enabled?'checked':'')+' aria-label="فعال"><input placeholder="Key" value="'+esc(key)+'" dir="auto"><input placeholder="Value" value="'+esc(value)+'" dir="auto"><button class="danger" aria-label="حذف">×</button>';row.lastElementChild.onclick=()=>row.remove();$(id).appendChild(row)}
 function rows(id){return [...$(id).querySelectorAll('.kv')].map(r=>({enabled:r.children[0].checked,key:r.children[1].value,value:r.children[2].value})).filter(x=>x.key.trim())}
@@ -151,8 +152,59 @@ function onResult(raw){
  }
 }
 function formatBytes(n){return n<1024?n+' B':(n/1024).toFixed(1)+' KB'}
-function snapshot(){return {method:$('method').value,url:$('url').value,params:rows('paramsRows'),headers:rows('headerRows'),auth:$('authType').value,authValues:Object.fromEntries(['bearerToken','basicUser','basicPass','apiKeyName','apiKeyValue','apiKeyPlace'].filter(id=>$(id)).map(id=>[id,$(id).value])),bodyMode,body:$('bodyText').value,contentType:$('contentType').value,form:rows('formRows'),pre:$('preScript').value,test:$('testScript').value,timeout:$('timeout').value,description:$('description').value,env:$('environment').value}}
-function loadSnapshot(x){if(!x)return;$('method').value=x.method||'GET';$('url').value=x.url||'';setRows('paramsRows',x.params);setRows('headerRows',x.headers);$('authType').value=x.auth||'none';renderAuth();Object.entries(x.authValues||{}).forEach(([k,v])=>{if($(k))$(k).value=v});bodyMode=x.bodyMode||'none';document.querySelectorAll('[data-body]').forEach(b=>b.classList.toggle('active',b.dataset.body===bodyMode));$('jsonBody').classList.toggle('hide',!['json','raw'].includes(bodyMode));$('formBody').classList.toggle('hide',bodyMode!=='form');$('bodyText').value=x.body||'';$('contentType').value=x.contentType||'application/json';setRows('formRows',x.form);$('preScript').value=x.pre||'';$('testScript').value=x.test||'';$('timeout').value=x.timeout||'60';$('description').value=x.description||'';if(x.env)$('environment').value=x.env;switchTab('params')}
+
+function requestTabTitle(tab){
+ const req=tab?.snapshot||{},method=req.method||'GET',url=String(req.url||'درخواست جدید');
+ let path=url;try{const parsed=new URL(url);path=parsed.pathname||parsed.hostname}catch(e){}
+ return method+' '+path;
+}
+function persistWorkspaceTabs(){
+ if(!activeWorkspaceTabId)return;
+ const active=workspaceTabs.find(t=>t.id===activeWorkspaceTabId);
+ if(active){active.snapshot=snapshot();active.mode=requestMode}
+ store.set('workspaceTabs',workspaceTabs);
+}
+function renderRequestTabs(){
+ const bar=$('requestTabBar');if(!bar)return;
+ bar.innerHTML=workspaceTabs.map(tab=>'<div class="request-tab '+(tab.id===activeWorkspaceTabId?'active':'')+'" onclick="activateRequestTab(\''+esc(tab.id)+'\')"><span class="tab-name">'+esc(requestTabTitle(tab))+'</span><button class="tab-close" title="بستن تب" onclick="event.stopPropagation();closeRequestTab(\''+esc(tab.id)+'\')">×</button></div>').join('')+'<button class="ghost request-tab-add" title="درخواست جدید" onclick="newRequestTab()">＋</button>';
+}
+function initRequestTabs(){
+ const saved=store.get('workspaceTabs',[]);
+ if(Array.isArray(saved)&&saved.length){
+  workspaceTabs=saved.filter(t=>t&&t.id&&t.snapshot).slice(0,12);
+  if(workspaceTabs.length){
+   activeWorkspaceTabId=workspaceTabs.some(t=>t.id===store.get('activeWorkspaceTabId',''))?store.get('activeWorkspaceTabId',''):workspaceTabs[0].id;
+   const active=workspaceTabs.find(t=>t.id===activeWorkspaceTabId);
+   loadSnapshot(active.snapshot);setMode(active.mode||active.snapshot.mode||'rest');renderRequestTabs();return;
+  }
+ }
+ const initial=store.get('lastRequest',null)||snapshot();
+ initial.mode=requestMode;
+ workspaceTabs=[{id:'tab_'+Date.now(),snapshot:initial,mode:requestMode}];
+ activeWorkspaceTabId=workspaceTabs[0].id;
+ persistWorkspaceTabs();renderRequestTabs();
+}
+function activateRequestTab(id){
+ if(id===activeWorkspaceTabId)return;
+ persistWorkspaceTabs();
+ const tab=workspaceTabs.find(t=>t.id===id);if(!tab)return;
+ activeWorkspaceTabId=id;loadSnapshot(tab.snapshot);setMode(tab.mode||tab.snapshot.mode||'rest');renderRequestTabs();store.set('activeWorkspaceTabId',id);
+}
+function newRequestTab(){
+ persistWorkspaceTabs();
+ if(workspaceTabs.length>=12){BehnamNative.toast('حداکثر ۱۲ درخواست را می‌توان هم‌زمان باز نگه داشت');return}
+ const req={method:'GET',url:'',params:[],headers:[{key:'Accept',value:'application/json',enabled:true},{key:'Content-Type',value:'application/json',enabled:true}],auth:'none',authValues:{},bodyMode:'none',body:'',contentType:'application/json',form:[],pre:'',test:'',timeout:'60',description:'',env:'',mode:'rest'};
+ const tab={id:'tab_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),snapshot:req,mode:'rest'};
+ workspaceTabs.push(tab);activeWorkspaceTabId=tab.id;loadSnapshot(req);setMode('rest');store.set('activeWorkspaceTabId',tab.id);persistWorkspaceTabs();renderRequestTabs();
+}
+function closeRequestTab(id){
+ const index=workspaceTabs.findIndex(t=>t.id===id);if(index<0)return;
+ if(workspaceTabs.length===1){workspaceTabs[0].snapshot={method:'GET',url:'',params:[],headers:[{key:'Accept',value:'application/json',enabled:true},{key:'Content-Type',value:'application/json',enabled:true}],auth:'none',authValues:{},bodyMode:'none',body:'',contentType:'application/json',form:[],pre:'',test:'',timeout:'60',description:'',env:'',mode:'rest'};activeWorkspaceTabId=workspaceTabs[0].id;loadSnapshot(workspaceTabs[0].snapshot);setMode('rest')}
+ else{workspaceTabs.splice(index,1);if(activeWorkspaceTabId===id){const next=workspaceTabs[Math.min(index,workspaceTabs.length-1)];activeWorkspaceTabId=next.id;loadSnapshot(next.snapshot);setMode(next.mode||next.snapshot.mode||'rest')}}
+ store.set('activeWorkspaceTabId',activeWorkspaceTabId);persistWorkspaceTabs();renderRequestTabs();
+}
+function snapshot(){return {method:$('method').value,url:$('url').value,params:rows('paramsRows'),headers:rows('headerRows'),auth:$('authType').value,authValues:Object.fromEntries(['bearerToken','basicUser','basicPass','apiKeyName','apiKeyValue','apiKeyPlace'].filter(id=>$(id)).map(id=>[id,$(id).value])),bodyMode,body:$('bodyText').value,contentType:$('contentType').value,form:rows('formRows'),pre:$('preScript').value,test:$('testScript').value,timeout:$('timeout').value,description:$('description').value,env:$('environment').value,mode:requestMode}}
+function loadSnapshot(x){if(!x)return;$('method').value=x.method||'GET';$('url').value=x.url||'';setRows('paramsRows',x.params);setRows('headerRows',x.headers);$('authType').value=x.auth||'none';renderAuth();Object.entries(x.authValues||{}).forEach(([k,v])=>{if($(k))$(k).value=v});bodyMode=x.bodyMode||'none';document.querySelectorAll('[data-body]').forEach(b=>b.classList.toggle('active',b.dataset.body===bodyMode));$('jsonBody').classList.toggle('hide',!['json','raw'].includes(bodyMode));$('formBody').classList.toggle('hide',bodyMode!=='form');$('bodyText').value=x.body||'';$('contentType').value=x.contentType||'application/json';setRows('formRows',x.form);$('preScript').value=x.pre||'';$('testScript').value=x.test||'';$('timeout').value=x.timeout||'60';$('description').value=x.description||'';$('environment').value=x.env||'';if(x.mode)requestMode=x.mode;switchTab('params')}
 function addHistory(req,res){let h=store.get('history',[]);h.unshift({req,res,at:new Date().toISOString()});store.set('history',h.slice(0,100));renderHistory()}
 function renderHistory(){const h=store.get('history',[]);const markup=h.length?h.map((x,i)=>'<div class="list-item"><div class="meta"><strong><span class="'+(x.res?.status>=200&&x.res?.status<400?'good':'bad')+'">'+esc(x.req.method)+'</span> · '+esc(x.res?.status||'ERR')+'</strong><small>'+esc(x.req.url)+'</small></div><div class="list-actions"><button onclick="restoreHistory('+i+')">↺</button><button class="danger" onclick="deleteHistory('+i+')">×</button></div></div>').join(''):'<div class="empty">تاریخچه خالی است</div>'; $('historyList').innerHTML=markup; if($('historyFull')) $('historyFull').innerHTML=markup}
 function restoreHistory(i){const x=store.get('history',[])[i];if(x){loadSnapshot(x.req);goPage('request')}}
@@ -441,7 +493,7 @@ function seedSamples(){
  upload('آزمایش فایل بزرگ تا ۱۰ مگابایت','برای بررسی آپلود فایل‌های بزرگ‌تر از endpoint اندازه‌گیری استفاده کن.','https://api.testingapis.com/api/bodies/large');
  store.set('folders',fs);store.set('collections',c);
 }
-function init(){seedSamples();setRows('paramsRows',[]);setRows('headerRows',[{key:'Accept',value:'application/json'},{key:'Content-Type',value:'application/json'}]);setRows('formRows',[]);renderAuth();renderHistory();renderCollections();renderEnvironments();$('collectionsPage').classList.add('hide');$('environmentsPage').classList.add('hide');$('historyPage').classList.add('hide');$('toolsPage').classList.add('hide');renderTestRuns();$('pendingId').value=''}
+function init(){seedSamples();setRows('paramsRows',[]);setRows('headerRows',[{key:'Accept',value:'application/json'},{key:'Content-Type',value:'application/json'}]);setRows('formRows',[]);renderAuth();renderHistory();renderCollections();renderEnvironments();$('collectionsPage').classList.add('hide');$('environmentsPage').classList.add('hide');$('historyPage').classList.add('hide');$('toolsPage').classList.add('hide');renderTestRuns();$('pendingId').value='';initRequestTabs()}
 window.BehnamTester={onResult,back,onUploadFilesSelected,onUploadResult};document.addEventListener('DOMContentLoaded',async()=>{await initializeApiXStorage();init()});
 </script>
 <div id="historyPage" class="layout hide"><div class="section-head">تاریخچه درخواست‌ها</div><div id="historyFull"></div></div>
