@@ -2,6 +2,8 @@ package com.behnamghafari.tester
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.webkit.*
 import android.widget.Toast
@@ -112,6 +114,21 @@ class MainActivity : Activity() {
                 )
             }
         }
+        @JavascriptInterface fun openTelegram() {
+            runOnUiThread {
+                val telegramIntent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=behnamghafari"))
+                try {
+                    startActivity(telegramIntent)
+                } catch (_: Exception) {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/behnamghafari")))
+                    } catch (_: Exception) {
+                        Toast.makeText(this@MainActivity, "تلگرام یا مرورگر در دسترس نیست", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
         @JavascriptInterface fun toast(message: String) {
             runOnUiThread { Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show() }
         }
