@@ -19,6 +19,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
+      - name: Restore stable debug signing key
+        run: |
+          mkdir -p "$HOME/.android"
+          base64 --decode .github/keys/behnam-tester-debug.keystore.base64 > "$HOME/.android/debug.keystore"
+          chmod 600 "$HOME/.android/debug.keystore"
       - name: Build debug APK
         run: gradle -p apps/behnam-tester :app:assembleDebug
       - name: Upload APK
