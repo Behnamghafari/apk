@@ -128,6 +128,7 @@ function onResult(raw){
    batchRun.results.push({name:batchItem?.name||'درخواست',method:batchItem?.req?.method||'',url:batchItem?.req?.url||'',status:null,duration:0,passed:false,httpStatusOk:false,error:r.error,tests:[],responsePreview:''});
    setTimeout(runNextInBatch,180)
   }
+  persistWorkspaceTabs();renderRequestTabs();
   return
  }
  if(batchRun){
@@ -143,7 +144,7 @@ function onResult(raw){
  $('responseCookies').textContent=(r.headers?.['set-cookie']||'کوکی Set-Cookie دریافت نشد');
  const ctx={tests:[],response:r,vars:activeScriptVars};runScript($('testScript').value,ctx);activeScriptVars={};
  $('testResults').innerHTML=ctx.tests.map(t=>'<div class="'+(t.ok?'good':'bad')+'">'+(t.ok?'✓ ':'✕ ')+esc(t.name)+(t.error?' — '+esc(t.error):'')+'</div>').join('')||'<span class="muted">برای این درخواست تستی تعریف نشده است.</span>';
- addHistory(snapshot(),r);
+ addHistory(snapshot(),r);persistWorkspaceTabs();renderRequestTabs();
  if(batchRun){
   const httpOk=good,testsOk=ctx.tests.every(t=>t.ok),passed=ctx.tests.length?testsOk:httpOk;
   if(passed)batchRun.passed++;else batchRun.failed++;
@@ -215,8 +216,8 @@ function closeRequestTab(id){
  else{workspaceTabs.splice(index,1);if(activeWorkspaceTabId===id){const next=workspaceTabs[Math.min(index,workspaceTabs.length-1)];activeWorkspaceTabId=next.id;loadSnapshot(next.snapshot);setMode(next.mode||next.snapshot.mode||'rest');restoreWorkspaceResponse(next)}}
  store.set('activeWorkspaceTabId',activeWorkspaceTabId);persistWorkspaceTabs();renderRequestTabs();
 }
-function snapshot(){return {method:$('method').value,url:$('url').value,params:rows('paramsRows'),headers:rows('headerRows'),auth:$('authType').value,authValues:Object.fromEntries(['bearerToken','basicUser','basicPass','apiKeyName','apiKeyValue','apiKeyPlace'].filter(id=>$(id)).map(id=>[id,$(id).value])),bodyMode,body:$('bodyText').value,contentType:$('contentType').value,form:rows('formRows'),pre:$('preScript').value,test:$('testScript').value,timeout:$('timeout').value,description:$('description').value,env:$('environment').value,mode:requestMode}}
-function loadSnapshot(x){if(!x)return;$('method').value=x.method||'GET';$('url').value=x.url||'';setRows('paramsRows',x.params);setRows('headerRows',x.headers);$('authType').value=x.auth||'none';renderAuth();Object.entries(x.authValues||{}).forEach(([k,v])=>{if($(k))$(k).value=v});bodyMode=x.bodyMode||'none';document.querySelectorAll('[data-body]').forEach(b=>b.classList.toggle('active',b.dataset.body===bodyMode));$('jsonBody').classList.toggle('hide',!['json','raw'].includes(bodyMode));$('formBody').classList.toggle('hide',bodyMode!=='form');$('bodyText').value=x.body||'';$('contentType').value=x.contentType||'application/json';setRows('formRows',x.form);$('preScript').value=x.pre||'';$('testScript').value=x.test||'';$('timeout').value=x.timeout||'60';$('description').value=x.description||'';$('environment').value=x.env||'';if(x.mode)requestMode=x.mode;switchTab('params')}
+function snapshot(){return {method:$('method').value,url:$('url').value,params:rows('paramsRows'),headers:rows('headerRows'),auth:$('authType').value,authValues:Object.fromEntries(['bearerToken','basicUser','basicPass','apiKeyName','apiKeyValue','apiKeyPlace'].filter(id=>$(id)).map(id=>[id,$(id).value])),bodyMode,body:$('bodyText').value,contentType:$('contentType').value,form:rows('formRows'),pre:$('preScript').value,test:$('testScript').value,timeout:$('timeout').value,description:$('description').value,env:$('environment').value,mode:requestMode,panel:document.querySelector('#requestTabs [data-tab].active')?.dataset.tab||'params'}}
+function loadSnapshot(x){if(!x)return;$('method').value=x.method||'GET';$('url').value=x.url||'';setRows('paramsRows',x.params);setRows('headerRows',x.headers);$('authType').value=x.auth||'none';renderAuth();Object.entries(x.authValues||{}).forEach(([k,v])=>{if($(k))$(k).value=v});bodyMode=x.bodyMode||'none';document.querySelectorAll('[data-body]').forEach(b=>b.classList.toggle('active',b.dataset.body===bodyMode));$('jsonBody').classList.toggle('hide',!['json','raw'].includes(bodyMode));$('formBody').classList.toggle('hide',bodyMode!=='form');$('bodyText').value=x.body||'';$('contentType').value=x.contentType||'application/json';setRows('formRows',x.form);$('preScript').value=x.pre||'';$('testScript').value=x.test||'';$('timeout').value=x.timeout||'60';$('description').value=x.description||'';$('environment').value=x.env||'';if(x.mode)requestMode=x.mode;switchTab(x.panel||'params')}
 function addHistory(req,res){let h=store.get('history',[]);h.unshift({req,res,at:new Date().toISOString()});store.set('history',h.slice(0,100));renderHistory()}
 function renderHistory(){const h=store.get('history',[]);const markup=h.length?h.map((x,i)=>'<div class="list-item"><div class="meta"><strong><span class="'+(x.res?.status>=200&&x.res?.status<400?'good':'bad')+'">'+esc(x.req.method)+'</span> · '+esc(x.res?.status||'ERR')+'</strong><small>'+esc(x.req.url)+'</small></div><div class="list-actions"><button onclick="restoreHistory('+i+')">↺</button><button class="danger" onclick="deleteHistory('+i+')">×</button></div></div>').join(''):'<div class="empty">تاریخچه خالی است</div>'; $('historyList').innerHTML=markup; if($('historyFull')) $('historyFull').innerHTML=markup}
 function restoreHistory(i){const x=store.get('history',[])[i];if(x){loadSnapshot(x.req);goPage('request')}}
