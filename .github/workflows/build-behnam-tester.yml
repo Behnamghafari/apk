@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: apix-latest-apk
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,6 +29,8 @@ jobs:
           chmod 600 "$HOME/.android/debug.keystore"
       - name: Build debug APK
         run: gradle -p apps/behnam-tester :app:assembleDebug
+      - name: Verify APK signature
+        run: apksigner verify --verbose --print-certs apps/behnam-tester/app/build/outputs/apk/debug/app-debug.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
