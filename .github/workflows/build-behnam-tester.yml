@@ -30,7 +30,11 @@ jobs:
       - name: Build debug APK
         run: gradle -p apps/behnam-tester :app:assembleDebug
       - name: Verify APK signature
-        run: apksigner verify --verbose --print-certs apps/behnam-tester/app/build/outputs/apk/debug/app-debug.apk
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs apps/behnam-tester/app/build/outputs/apk/debug/app-debug.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
