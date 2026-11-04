@@ -107,7 +107,7 @@ class MainActivity : Activity() {
                             contentType.contains("xml", true) || contentType.contains("javascript", true) ||
                             contentType.contains("x-www-form-urlencoded", true) || contentType.isBlank()
                         val responseBody = if (isText) String(bytes, Charsets.UTF_8) else "[Binary response: ${bytes.size} bytes]"
-                        val displayBody = if (truncated && isText) responseBody + "\\n\\n[Response truncated at 5 MB]" else responseBody
+                        val displayBody = if (truncated) responseBody + "\\n\\n[Response truncated at 5 MB]" else responseBody
                         val result = JSONObject()
                             .put("id", id).put("ok", response.isSuccessful).put("status", response.code)
                             .put("statusText", response.message).put("duration", System.currentTimeMillis() - start)
