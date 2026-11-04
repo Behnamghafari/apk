@@ -385,7 +385,7 @@ function seedSamples(){
  add('samples_security','هدرهای امنیتی پاسخ','GET',hb+'/response-headers?X-Content-Type-Options=nosniff&X-Frame-Options=DENY&Referrer-Policy=no-referrer');
  add('samples_security','CORS Response Headers','GET',hb+'/response-headers?Access-Control-Allow-Origin=https%3A%2F%2Fexample.com&Access-Control-Allow-Methods=GET%2CPOST');
  add('samples_security','Origin سفارشی','GET',hb+'/get',{headers:[{key:'Origin',value:'https://example.com',enabled:true}]});
- j('samples_security','رشته‌های امنیتی به‌عنوان داده','POST',hb+'/post',{input:"<script>alert('xss')</script>",quote:"' OR '1'='1",note:'فقط داده آزمایشی؛ اجرا نمی‌شود'});
+ j('samples_security','رشته‌های امنیتی به‌عنوان داده','POST',hb+'/post',{input:"<script>alert('xss')<\/script>",quote:"' OR '1'='1",note:'فقط داده آزمایشی؛ اجرا نمی‌شود'});
  add('samples_performance','اندازه‌گیری پاسخ سریع','GET',hb+'/get');
  add('samples_performance','تأخیر یک ثانیه','GET',hb+'/delay/1');
  add('samples_performance','تأخیر پنج ثانیه','GET',hb+'/delay/5');
