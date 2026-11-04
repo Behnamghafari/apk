@@ -1,4 +1,4 @@
-name: Build Behnam Tester APK
+name: Build ApiX APK
 on:
   push:
     paths:
@@ -36,8 +36,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: behnam-tester-latest
-          name: بهنام تستر - آخرین نسخه
-          body: آخرین نسخه آزمایشی بهنام تستر برای اندروید.
+          name: ApiX - Latest Android Build
+          body: آخرین نسخه ApiX برای اندروید.
           prerelease: true
           make_latest: false
           overwrite_files: true
