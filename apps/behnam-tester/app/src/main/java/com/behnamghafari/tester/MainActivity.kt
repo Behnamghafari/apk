@@ -3,12 +3,14 @@ package com.behnamghafari.tester
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.*
 import android.widget.Toast
 import androidx.core.view.WindowCompat
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.source
@@ -19,7 +21,9 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private val maxResponseBytes = 5 * 1024 * 1024
     private val uploadRequestCode = 4812
+    private val cookieJar by lazy { PersistentCookieJar(getSharedPreferences("apix_http_cookies", MODE_PRIVATE)) }
     private val client = OkHttpClient.Builder()
+        .cookieJar(cookieJar)
         .connectTimeout(45, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(120, TimeUnit.SECONDS)
@@ -221,6 +225,19 @@ class MainActivity : Activity() {
             }
         }
 
+        @JavascriptInterface fun getCookies(): String = cookieJar.exportJson().toString()
+        @JavascriptInterface fun addCookie(url: String, setCookie: String): String {
+            return try {
+                cookieJar.addCookie(url, setCookie)
+                JSONObject().put("ok", true).toString()
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: "Invalid cookie").toString()
+            }
+        }
+        @JavascriptInterface fun deleteCookie(name: String, domain: String, path: String): Boolean =
+            cookieJar.deleteCookie(name, domain, path)
+        @JavascriptInterface fun clearCookies() { cookieJar.clear() }
+
         @JavascriptInterface fun openTelegram() {
             runOnUiThread {
                 val profileUrl = Uri.parse("https://t.me/behnamghafari")
@@ -292,5 +309,103 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         if (::web.isInitialized) web.destroy()
         super.onDestroy()
+    }
+}
+
+private class PersistentCookieJar(private val preferences: SharedPreferences) : CookieJar {
+    private val lock = Any()
+    private val cookies = mutableListOf<Cookie>()
+
+    init {
+        synchronized(lock) {
+            val stored = try { JSONArray(preferences.getString("cookies", "[]")) } catch (_: Exception) { JSONArray() }
+            for (i in 0 until stored.length()) {
+                val item = stored.optJSONObject(i) ?: continue
+                try {
+                    val builder = Cookie.Builder()
+                        .name(item.getString("name"))
+                        .value(item.getString("value"))
+                        .path(item.optString("path", "/"))
+                        .expiresAt(item.optLong("expiresAt", Long.MAX_VALUE))
+                    val domain = item.getString("domain")
+                    if (item.optBoolean("hostOnly", false)) builder.hostOnlyDomain(domain) else builder.domain(domain)
+                    if (item.optBoolean("secure")) builder.secure()
+                    if (item.optBoolean("httpOnly")) builder.httpOnly()
+                    val cookie = builder.build()
+                    if (cookie.expiresAt > System.currentTimeMillis()) cookies.add(cookie)
+                } catch (_: Exception) { }
+            }
+            persistLocked()
+        }
+    }
+
+    override fun saveFromResponse(url: HttpUrl, received: List<Cookie>) {
+        synchronized(lock) {
+            received.forEach { incoming ->
+                cookies.removeAll { it.name == incoming.name && it.domain == incoming.domain && it.path == incoming.path }
+                if (incoming.expiresAt > System.currentTimeMillis()) cookies.add(incoming)
+            }
+            cookies.removeAll { it.expiresAt <= System.currentTimeMillis() }
+            persistLocked()
+        }
+    }
+
+    override fun loadForRequest(url: HttpUrl): List<Cookie> = synchronized(lock) {
+        cookies.removeAll { it.expiresAt <= System.currentTimeMillis() }
+        persistLocked()
+        cookies.filter { it.matches(url) }.toList()
+    }
+
+    fun addCookie(url: String, raw: String) {
+        val parsedUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("آدرس معتبر نیست")
+        val cookie = Cookie.parse(parsedUrl, raw) ?: throw IllegalArgumentException("فرمت Set-Cookie معتبر نیست")
+        saveFromResponse(parsedUrl, listOf(cookie))
+    }
+
+    fun deleteCookie(name: String, domain: String, path: String): Boolean = synchronized(lock) {
+        val removed = cookies.removeAll { it.name == name && it.domain == domain && it.path == path }
+        if (removed) persistLocked()
+        removed
+    }
+
+    fun clear() = synchronized(lock) {
+        cookies.clear()
+        persistLocked()
+    }
+
+    fun exportJson(): JSONArray = synchronized(lock) {
+        cookies.removeAll { it.expiresAt <= System.currentTimeMillis() }
+        persistLocked()
+        JSONArray().also { result ->
+            cookies.sortedWith(compareBy<Cookie> { it.domain }.thenBy { it.name }).forEach { cookie ->
+                result.put(JSONObject()
+                    .put("name", cookie.name)
+                    .put("value", cookie.value)
+                    .put("domain", cookie.domain)
+                    .put("path", cookie.path)
+                    .put("expiresAt", cookie.expiresAt)
+                    .put("secure", cookie.secure)
+                    .put("httpOnly", cookie.httpOnly)
+                    .put("hostOnly", cookie.hostOnly)
+                    .put("persistent", cookie.persistent))
+            }
+        }
+    }
+
+    private fun persistLocked() {
+        val data = JSONArray()
+        cookies.forEach { cookie ->
+            data.put(JSONObject()
+                .put("name", cookie.name)
+                .put("value", cookie.value)
+                .put("domain", cookie.domain)
+                .put("path", cookie.path)
+                .put("expiresAt", cookie.expiresAt)
+                .put("secure", cookie.secure)
+                .put("httpOnly", cookie.httpOnly)
+                .put("hostOnly", cookie.hostOnly)
+                .put("persistent", cookie.persistent))
+        }
+        preferences.edit().putString("cookies", data.toString()).apply()
     }
 }
