@@ -164,7 +164,7 @@ function persistWorkspaceTabs(){
  if(!activeWorkspaceTabId)return;
  const active=workspaceTabs.find(t=>t.id===activeWorkspaceTabId);
  if(active){active.snapshot=snapshot();active.mode=requestMode;active.lastResponse=lastResponse;active.previousResponse=previousResponse}
- store.set('workspaceTabs',workspaceTabs);
+ const persistedTabs=workspaceTabs.map(tab=>{const saved={...tab};['lastResponse','previousResponse'].forEach(key=>{const response=saved[key];if(response&&typeof response.body==='string'&&response.body.length>500000)saved[key]={...response,body:response.body.slice(0,500000),_bodyTruncated:true}});return saved});store.set('workspaceTabs',persistedTabs);
 }
 function renderRequestTabs(){
  const bar=$('requestTabBar');if(!bar)return;
@@ -191,7 +191,7 @@ function restoreWorkspaceResponse(tab){
  if(!lastResponse){$('responseStatus').textContent='پاسخ سرور';$('responseMeta').textContent='هنوز درخواستی ارسال نشده';$('responseBody').textContent='پاسخ اینجا نمایش داده می‌شود.';$('responseRaw').textContent='';$('responseHeaders').textContent='';$('responseCookies').textContent='';$('responseDiff').textContent='برای مقایسه، حداقل دو پاسخ دریافت کن.';$('responseDiffSummary').textContent='برای مقایسه، ابتدا دو پاسخ دریافت کن.';return}
  const r=lastResponse,good=!r.error&&r.status>=200&&r.status<400;
  $('responseStatus').innerHTML=r.error?'<span class="bad">خطا در اتصال</span>':'<span class="'+(good?'good':'bad')+'">'+r.status+' '+esc(r.statusText)+'</span>';
- $('responseMeta').textContent=r.error||((r.duration||0)+' ms · '+formatBytes(r.size||0)+' · '+esc(r.contentType||''));
+ $('responseMeta').textContent=r.error||((r.duration||0)+' ms · '+formatBytes(r.size||0)+' · '+esc(r.contentType||'')+(r._bodyTruncated?' · متن ذخیره‌شده محدود شده':''));
  renderResponseBody(r.error||r.body||'');$('responseRaw').textContent=r.body||'';
  $('responseHeaders').textContent=Object.entries(r.headers||{}).map(([k,v])=>k+': '+v).join('\n');
  $('responseCookies').textContent=r.headers?.['set-cookie']||'کوکی Set-Cookie دریافت نشد';renderResponseDiff();
