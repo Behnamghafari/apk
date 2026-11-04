@@ -74,6 +74,50 @@ class MainActivity : Activity() {
 
     inner class Bridge {
 
+        @JavascriptInterface fun runMonitorCheck(raw: String) {
+            Thread {
+                val result = JSONObject()
+                val monitorId = try { JSONObject(raw).optString("id") } catch (_: Exception) { "" }
+                result.put("id", monitorId).put("checkedAt", System.currentTimeMillis())
+                val started = System.nanoTime()
+                try {
+                    val data = JSONObject(raw)
+                    val url = data.getString("url").trim()
+                    require(url.startsWith("http://") || url.startsWith("https://")) { "آدرس باید با http یا https شروع شود" }
+                    val method = data.optString("method", "GET").uppercase()
+                    require(method == "GET" || method == "HEAD") { "متد مانیتورینگ پشتیبانی نمی‌شود" }
+                    val builder = Request.Builder().url(url).method(method, null)
+                    val headers = data.optJSONArray("headers")
+                    if (headers != null) for (i in 0 until headers.length()) {
+                        val header = headers.optJSONObject(i) ?: continue
+                        val name = header.optString("key").trim()
+                        if (name.isNotEmpty() && header.optBoolean("enabled", true)) {
+                            builder.header(name, header.optString("value"))
+                        }
+                    }
+                    val timeout = data.optLong("timeoutSeconds", 15L).coerceIn(5L, 30L)
+                    client.newBuilder().connectTimeout(timeout, TimeUnit.SECONDS)
+                        .readTimeout(timeout, TimeUnit.SECONDS).callTimeout(timeout, TimeUnit.SECONDS)
+                        .build().newCall(builder.build()).execute().use { response ->
+                            val duration = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+                            val expected = data.optInt("expectedStatus", 0)
+                            val healthy = if (expected > 0) response.code == expected else response.code in 200..399
+                            result.put("healthy", healthy).put("status", response.code)
+                                .put("duration", duration).put("finalUrl", response.request.url.toString())
+                        }
+                } catch (e: Exception) {
+                    result.put("healthy", false).put("status", JSONObject.NULL)
+                        .put("duration", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started))
+                        .put("error", e.message ?: e.javaClass.simpleName)
+                }
+                runOnUiThread {
+                    if (::web.isInitialized) web.evaluateJavascript(
+                        "window.BehnamTester && window.BehnamTester.onMonitorResult(" + JSONObject.quote(result.toString()) + ")", null
+                    )
+                }
+            }.start()
+        }
+
         @JavascriptInterface fun runLoadTest(raw: String) {
             Thread {
                 val result = JSONObject()
