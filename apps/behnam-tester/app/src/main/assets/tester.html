@@ -705,6 +705,66 @@ function startApiXMonitoring(){
  },1000);
 }
 
+
+let scenarioRun=null;
+const scenarioExamples=[
+ {id:'scenario_posts_chain',name:'زنجیره دریافت پست و نظرات',description:'ابتدا یک پست می‌گیرد، شناسه را ذخیره می‌کند و با همان شناسه نظرات را دریافت می‌کند.',steps:[
+  {name:'دریافت پست',method:'GET',url:'https://jsonplaceholder.typicode.com/posts/1',expectStatus:200,expectJsonPath:'id',expectEquals:1,save:{postId:'id',postTitle:'title'}},
+  {name:'دریافت نظرات همان پست',method:'GET',url:'https://jsonplaceholder.typicode.com/posts/{{vars.postId}}/comments',expectStatus:200,save:{commentCount:'length'}}
+ ]},
+ {id:'scenario_conditional',name:'سناریوی شرطی و استخراج داده',description:'اگر پاسخ مرحله اول ۲۰۰ بود، مرحله دوم اجرا می‌شود؛ در غیر این صورت مرحله دوم رد می‌شود.',steps:[
+  {name:'بررسی سلامت سرویس',method:'GET',url:'https://httpbin.org/status/200',expectStatus:200,save:{healthStatus:'status'}},
+  {name:'مرحله فقط در صورت سلامت',method:'GET',url:'https://httpbin.org/get?health={{vars.healthStatus}}',when:{status:200},expectStatus:200,expectJsonPath:'args.health',expectEquals:'200'}
+ ]}
+];
+function getScenarios(){const x=store.get('scenarios',null);return Array.isArray(x)?x:[]}
+function seedScenarioExamples(){const current=getScenarios();let changed=false;scenarioExamples.forEach(example=>{if(!current.some(x=>x.id===example.id)){current.push(JSON.parse(JSON.stringify(example)));changed=true}});if(changed)store.set('scenarios',current);renderScenarios()}
+function renderScenarios(){
+ const list=$('scenarioList');if(!list)return;const items=getScenarios();$('scenarioCount').textContent=items.length+' سناریو';
+ list.innerHTML=items.map((s,i)=>'<div class="scenario-card"><div class="run-card-head"><strong>'+esc(s.name)+'</strong><span class="run-pill">'+(s.steps?.length||0)+' مرحله</span></div><div class="tiny muted" style="margin-top:5px">'+esc(s.description||'سناریوی سفارشی')+'</div><div class="scenario-actions"><button class="primary" onclick="runScenarioIndex('+i+')">▶ اجرا</button><button onclick="editScenarioIndex('+i+')">ویرایش</button><button class="danger" onclick="deleteScenarioIndex('+i+')">حذف</button></div></div>').join('')||'<div class="empty">هنوز سناریویی وجود ندارد.</div>';
+}
+function loadScenarioExample(index){const s=scenarioExamples[index];if(!s)return;$('scenarioEditor').value=JSON.stringify(s,null,2);$('scenarioEditor').scrollIntoView({behavior:'smooth',block:'center'});}
+function saveScenarioFromEditor(){
+ try{const s=JSON.parse($('scenarioEditor').value);if(!s||typeof s!=='object'||!s.name||!Array.isArray(s.steps)||!s.steps.length||s.steps.length>30)throw Error('سناریو باید نام و ۱ تا ۳۰ مرحله داشته باشد');
+ s.steps.forEach((step,i)=>{if(!step.url||!/^https?:\/\//i.test(step.url))throw Error('آدرس مرحله '+(i+1)+' معتبر نیست');if(!['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].includes(String(step.method||'GET').toUpperCase()))throw Error('متد مرحله '+(i+1)+' معتبر نیست');if(step.headers&&!Array.isArray(step.headers))throw Error('headers باید آرایه باشد');if(step.save&&(typeof step.save!=='object'||Array.isArray(step.save)))throw Error('save باید شیء باشد')});
+ const items=getScenarios(),idx=items.findIndex(x=>x.id===s.id);if(idx>=0)items[idx]=s;else{s.id='scenario_'+Date.now().toString(36);items.push(s)}store.set('scenarios',items);renderScenarios();BehnamNative.toast('سناریو ذخیره شد')
+ }catch(e){BehnamNative.toast('سناریو نامعتبر: '+e.message)}
+}
+function editScenarioIndex(i){const s=getScenarios()[i];if(s){$('scenarioEditor').value=JSON.stringify(s,null,2);$('scenarioEditor').scrollIntoView({behavior:'smooth',block:'center'})}}
+function deleteScenarioIndex(i){const items=getScenarios();items.splice(i,1);store.set('scenarios',items);renderScenarios()}
+function runScenarioIndex(i){const s=getScenarios()[i];if(!s)return;if(scenarioRun){BehnamNative.toast('یک سناریو در حال اجراست');return}if(!s.steps?.length)return;scenarioRun={scenario:s,index:0,vars:{},previous:null,results:[],startedAt:Date.now(),skipped:0};$('scenarioRunLog').textContent='شروع: '+s.name+'\n';$('scenarioRunState').textContent='در حال اجرا';runNextScenarioStep()}
+function scenarioValue(value,run){return String(value??'').replace(/\{\{\s*(vars|prev)(?:\.([^}]+))?\s*\}\}/g,(_,scope,path)=>{const root=scope==='vars'?run.vars:(run.previous||{});if(!path)return JSON.stringify(root);const v=path.split('.').reduce((o,k)=>o==null?undefined:o[k],root);return v==null?'':typeof v==='object'?JSON.stringify(v):String(v)})}
+function scenarioPath(obj,path){return String(path||'').split('.').reduce((v,k)=>v==null?undefined:k==='length'&&typeof v.length==='number'?v.length:v[k],obj)}
+function scenarioLog(line){$('scenarioRunLog').textContent+=line+'\n';$('scenarioRunLog').scrollTop=$('scenarioRunLog').scrollHeight}
+function runNextScenarioStep(){
+ const run=scenarioRun;if(!run)return;
+ if(run.index>=run.scenario.steps.length){finishScenarioRun();return}
+ const index=run.index,step=run.scenario.steps[index],prev=run.previous||{};
+ if(step.when){let ok=true;if(step.when.status!=null)ok=Number(prev.status)===Number(step.when.status);if(ok&&step.when.path)ok=JSON.stringify(scenarioPath(prev.json,step.when.path))===JSON.stringify(step.when.equals);if(!ok){run.skipped++;run.results.push({name:step.name||'Step '+(index+1),skipped:true,reason:'شرط برقرار نبود'});scenarioLog('SKIP '+(step.name||'Step '+(index+1))+' · شرط برقرار نبود');run.index++;runNextScenarioStep();return}}
+ const url=scenarioValue(step.url,run),body=scenarioValue(step.body,run),headers=(step.headers||[]).map(x=>({key:scenarioValue(x.key,run),value:scenarioValue(x.value,run)}));
+ try{const u=new URL(url);if(!['http:','https:'].includes(u.protocol))throw Error('فقط HTTP/HTTPS پشتیبانی می‌شود');const method=String(step.method||'GET').toUpperCase();const req={id:'scenario_'+Date.now(),url:u.toString(),method,headers,bodyType:body?'raw':'none',body,contentType:step.contentType||'application/json',timeout:Math.min(120,Math.max(5,Number(step.timeout)||30))};run.currentStep=index;scenarioLog('RUN '+(index+1)+'/'+run.scenario.steps.length+' '+(step.name||method+' '+url));BehnamNative.sendRequest(JSON.stringify(req))}
+ catch(e){run.results.push({name:step.name||'Step '+(index+1),passed:false,error:e.message});scenarioLog('FAIL '+e.message);run.index++;runNextScenarioStep()}
+}
+function handleScenarioResponse(response){
+ const run=scenarioRun;if(!run)return;const step=run.scenario.steps[run.currentStep],status=Number(response.status)||0;let json=null;try{json=JSON.parse(response.body||'null')}catch(e){}
+ const prev={status,body:response.body||'',json,headers:response.headers||{},duration:response.duration||0,url:response.finalUrl||step.url};run.previous=prev;const errors=[];
+ if(response.error)errors.push(response.error);
+ if(step.expectStatus!=null&&status!==Number(step.expectStatus))errors.push('HTTP expected '+step.expectStatus+', got '+status);
+ if(step.expectJsonPath){const actual=scenarioPath(json,step.expectJsonPath);if(actual===undefined)errors.push('JSON path not found: '+step.expectJsonPath);else if(Object.prototype.hasOwnProperty.call(step,'expectEquals')&&JSON.stringify(actual)!==JSON.stringify(step.expectEquals))errors.push('Expected '+JSON.stringify(step.expectEquals)+', got '+JSON.stringify(actual))}
+ if(!response.error&&step.save)Object.entries(step.save).forEach(([key,path])=>{const value=scenarioPath(json,path);if(value!==undefined)run.vars[key]=value;else errors.push('Cannot save '+key+' from '+path)});
+ const passed=!errors.length;run.results.push({name:step.name||'Step '+(run.currentStep+1),status,duration:response.duration||0,passed,error:errors.join('; '),saved:step.save||{}});
+ scenarioLog((passed?'PASS ':'FAIL ')+(step.name||'Step '+(run.currentStep+1))+' · HTTP '+(status||'ERR')+' · '+(response.duration||0)+'ms'+(errors.length?' · '+errors.join('; '):''));
+ lastResponse=response;const good=!response.error&&status>=200&&status<400;$('responseStatus').innerHTML=response.error?'<span class="bad">خطا در اتصال</span>':'<span class="'+(good?'good':'bad')+'">'+status+' '+esc(response.statusText||'')+'</span>';$('responseMeta').textContent=(response.duration||0)+' ms · '+esc(response.contentType||'');renderResponseBody(response.error||response.body||'');$('responseRaw').textContent=response.body||'';addHistory(snapshot(),response);
+ run.index++;if(!passed){scenarioLog('توقف سناریو به دلیل شکست مرحله');finishScenarioRun(false);return}
+ setTimeout(runNextScenarioStep,180)
+}
+function finishScenarioRun(completed=true){
+ const run=scenarioRun;if(!run)return;const passed=run.results.filter(x=>x.passed).length,failed=run.results.filter(x=>x.passed===false).length;
+ const report={scenario:run.scenario.name,startedAt:new Date(run.startedAt).toISOString(),finishedAt:new Date().toISOString(),duration:Date.now()-run.startedAt,total:run.results.length,passed,failed,skipped:run.skipped,variables:run.vars,results:run.results,completed};
+ const history=store.get('scenarioRuns',[]);history.unshift(report);store.set('scenarioRuns',history.slice(0,30));scenarioLog((completed?'DONE ':'STOPPED ')+' · '+passed+' موفق · '+failed+' ناموفق · '+run.skipped+' ردشده');$('scenarioRunState').textContent=completed?'پایان اجرا':'متوقف';scenarioRun=null;
+}
+function cancelScenarioRun(){if(!scenarioRun){BehnamNative.toast('سناریویی در حال اجرا نیست');return}finishScenarioRun(false)}
+
 </script>
 <div id="historyPage" class="layout hide"><div class="section-head">تاریخچه درخواست‌ها</div><div id="historyFull"></div></div>
 <div id="collectionsPage" class="layout hide"><div class="section-head">مجموعه‌ها <div class="row" style="flex:0 0 auto"><button class="ghost tiny" onclick="exportCollections()">خروجی</button><button class="ghost tiny" onclick="importCollections()">ورود</button><button class="ghost tiny" onclick="exportApiDocumentation()">مستندات</button><button class="primary tiny" onclick="createFolder()">＋ پوشه اصلی</button></div></div><div class="notice">کتابخانه API های تستی شامل REST API، متدهای HTTP، احراز هویت، فرمت داده، Pagination، خطاها، GraphQL، WebSocket، API های عمومی، امنیت، کارایی و آپلود فایل است. تست‌ها را می‌توانی اجرا، ویرایش و به مجموعه‌های شخصی خودت کپی کنی. اجرای مجموعه، درخواست‌ها را به‌ترتیب می‌فرستد. دکمه «اجرای داده‌ای» مجموعه را با چند ردیف ورودی JSON اجرا می‌کند؛ متغیرهای هر ردیف با قالب {{userId}} در URL، هدر، بدنه و اسکریپت قابل استفاده‌اند و زنجیره درخواست‌ها برای هر ردیف از ابتدا شروع می‌شود. برای زنجیره‌کردن درخواست‌ها، خروجی درخواست قبلی را با متغیرهایی مثل <bdi dir="ltr">{{prev.access_token}}</bdi>، <bdi dir="ltr">{{prev.status}}</bdi> یا <bdi dir="ltr">{{prev.raw}}</bdi> در درخواست بعدی استفاده کن.</div><div id="collectionsList"></div></div>
