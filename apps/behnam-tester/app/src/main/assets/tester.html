@@ -96,7 +96,7 @@ function runScript(src,context){
   upsert:item=>{if(!item?.key)throw Error('Header key is required');const found=draft.headers.find(x=>x.key.toLowerCase()===String(item.key).toLowerCase());if(found){found.value=String(item.value??'');found.enabled=true}else requestHeaders.add(item)},
   remove:key=>{draft.headers=draft.headers.filter(x=>x.key.toLowerCase()!==String(key).toLowerCase())}
  };
- const requestApi={headers:requestHeaders,body:{update:value=>{draft.body=String(value??'');if(draft.bodyMode==='none')draft.bodyMode='raw'}}};
+ const requestApi={headers:requestHeaders,body:{update:value=>{draft.body=String(value??'');if(draft.bodyMode==='none'||draft.bodyMode==='form')draft.bodyMode='raw'}}};
  Object.defineProperties(requestApi,{url:{get:()=>draft.url,set:value=>draft.url=String(value)},method:{get:()=>draft.method,set:value=>draft.method=String(value).toUpperCase()}});
  const pm={
   environment:{set:saveEnv,get:k=>activeEnv()[k],unset:k=>{const es=store.get('envs',[]),id=$('environment').value,e=es.find(x=>x.id===id);if(e){delete e.values[k];store.set('envs',es)}},replaceIn},
