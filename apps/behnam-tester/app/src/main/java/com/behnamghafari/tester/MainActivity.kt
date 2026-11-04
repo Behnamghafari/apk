@@ -22,20 +22,22 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private val maxResponseBytes = 5 * 1024 * 1024
     private val uploadRequestCode = 4812
-    private val cookieJar by lazy { PersistentCookieJar(getSharedPreferences("apix_http_cookies", MODE_PRIVATE)) }
-    private val client = OkHttpClient.Builder()
-        .cookieJar(cookieJar)
-        .connectTimeout(45, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
-        .writeTimeout(120, TimeUnit.SECONDS)
-        .callTimeout(180, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .followSslRedirects(true)
-        .build()
+    private lateinit var cookieJar: PersistentCookieJar
+    private lateinit var client: OkHttpClient
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        cookieJar = PersistentCookieJar(getSharedPreferences("apix_http_cookies", MODE_PRIVATE))
+        client = OkHttpClient.Builder()
+            .cookieJar(cookieJar)
+            .connectTimeout(45, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(120, TimeUnit.SECONDS)
+            .callTimeout(180, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
         WindowCompat.setDecorFitsSystemWindows(window, true)
         window.statusBarColor = android.graphics.Color.rgb(11, 17, 32)
         window.navigationBarColor = android.graphics.Color.rgb(11, 17, 32)
