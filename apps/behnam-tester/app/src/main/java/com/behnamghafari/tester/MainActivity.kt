@@ -255,7 +255,7 @@ class MainActivity : Activity() {
                     val bytes = responseBody.toByteArray(Charsets.UTF_8)
                     val reason = when (status) { 200 -> "OK"; 201 -> "Created"; 400 -> "Bad Request"; 401 -> "Unauthorized"; 403 -> "Forbidden"; 404 -> "Not Found"; 500 -> "Internal Server Error"; else -> "Mock" }
                     val output = s.getOutputStream()
-                    output.write("HTTP/1.1 $status $reason\r\nContent-Type: $contentType\r\nContent-Length: " + bytes.size + "\r\nConnection: close\r\n$extraHeaders\r\n".toByteArray(Charsets.UTF_8))
+                    output.write(("HTTP/1.1 $status $reason\r\nContent-Type: $contentType\r\nContent-Length: " + bytes.size + "\r\nConnection: close\r\n$extraHeaders\r\n").toByteArray(Charsets.UTF_8))
                     output.write(bytes); output.flush()
                 } catch (_: Exception) { }
             }
