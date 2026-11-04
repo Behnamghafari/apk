@@ -309,64 +309,105 @@ function downloadResponse(){if(!lastResponse)return;const blob=new Blob([lastRes
 function back(){if($('uploadModal').classList.contains('open')){closeUpload();return}if($('textModal').classList.contains('open')||$('aboutModal').classList.contains('open')||$('envEditorModal').classList.contains('open')){closeModal();return}if(currentPage!=='request')goPage('request')}
 function seedSamples(){
  const fs=store.get('folders',[]),c=store.get('collections',[]);
- const ensureFolder=(id,name,parentId=null)=>{let f=fs.find(x=>x.id===id);if(!f){f={id,name,parentId};fs.push(f)}else{f.name=name;f.parentId=parentId}return f};
- ensureFolder('samples_root','API های تستی',null);
- ensureFolder('samples_jsonplaceholder','JSONPlaceholder · REST API','samples_root');
- ensureFolder('samples_http','HTTP · Authorization · Cookies','samples_root');
- ensureFolder('samples_upload','تست آپلود','samples_root');
- const add=(folderId,name,method,url,bodyMode='none',body='',auth='none',authValues={},headers=[],description='نمونه آماده برای آزمایش API')=>{
+ const ensure=(id,name,parent='samples_root')=>{let f=fs.find(x=>x.id===id);if(!f){f={id,name,parentId:parent};fs.push(f)}else{f.name=name;f.parentId=parent}return f};
+ ensure('samples_root','API های تستی',null);
+ ensure('samples_jsonplaceholder','JSONPlaceholder · REST API');
+ ensure('samples_http','HTTP · Authorization · Cookies');
+ ensure('samples_upload','تست آپلود');
+ const add=(folderId,name,method,url,opts={})=>{
   if(c.some(x=>x.folderId===folderId&&x.name===name))return;
-  c.push({id:'sample_'+folderId+'_'+Math.random().toString(36).slice(2,9),folderId,name,req:{method,url,params:[],headers:[{key:'Accept',value:'application/json',enabled:true},...headers],auth,authValues,bodyMode,body,contentType:'application/json',form:[],pre:'',test:"pm.test('پاسخ HTTP دریافت شد', () => pm.expect(pm.response.code > 0).to.be.true());",timeout:'30',description,env:''}})
+  c.push({id:'sample_'+folderId+'_'+Math.random().toString(36).slice(2,9),folderId,name,req:{method,url,params:[],headers:[{key:'Accept',value:'application/json',enabled:true},...(opts.headers||[])],auth:opts.auth||'none',authValues:opts.authValues||{},bodyMode:opts.bodyMode||'none',body:opts.body||'',contentType:opts.contentType||'application/json',form:[],pre:'',test:opts.status?"pm.test('HTTP status is "+opts.status+"', () => pm.response.to.have.status("+opts.status+"));":"pm.test('پاسخ HTTP دریافت شد', () => pm.expect(pm.response.code > 0).to.be.true());",timeout:'30',description:opts.description||'نمونه آماده برای تمرین و بررسی API',env:''}});
  };
- const b='https://jsonplaceholder.typicode.com';
- add('samples_jsonplaceholder','همه پست‌ها · GET','GET',b+'/posts');
- add('samples_jsonplaceholder','پست شماره 1 · GET','GET',b+'/posts/1');
- add('samples_jsonplaceholder','فیلتر پست‌های کاربر · GET','GET',b+'/posts?userId=1');
- add('samples_jsonplaceholder','کامنت‌های پست · GET','GET',b+'/comments?postId=1');
- add('samples_jsonplaceholder','آلبوم‌ها · GET','GET',b+'/albums');
- add('samples_jsonplaceholder','تصاویر آلبوم · GET','GET',b+'/photos?albumId=1');
- add('samples_jsonplaceholder','کاربران · GET','GET',b+'/users');
- add('samples_jsonplaceholder','Todo های کاربر · GET','GET',b+'/todos?userId=1');
- add('samples_jsonplaceholder','ساخت پست · POST','POST',b+'/posts','json',JSON.stringify({title:'ApiX sample',body:'POST sample request',userId:1},null,2));
- add('samples_jsonplaceholder','جایگزینی پست · PUT','PUT',b+'/posts/1','json',JSON.stringify({id:1,title:'Updated title',body:'Updated body',userId:1},null,2));
- add('samples_jsonplaceholder','ویرایش جزئی پست · PATCH','PATCH',b+'/posts/1','json',JSON.stringify({title:'Patched title'},null,2));
- add('samples_jsonplaceholder','حذف پست · DELETE','DELETE',b+'/posts/1');
- add('samples_jsonplaceholder','ساخت کامنت · POST','POST',b+'/comments','json',JSON.stringify({postId:1,name:'ApiX',email:'dev@example.com',body:'Sample comment'},null,2));
- add('samples_jsonplaceholder','ساخت Todo · POST','POST',b+'/todos','json',JSON.stringify({userId:1,title:'Test API',completed:false},null,2));
- const h='https://httpbin.org';
- add('samples_http','نمایش هدرهای درخواست','GET',h+'/headers');
- add('samples_http','تست Authorization Bearer','GET',h+'/bearer','none','','bearer',{bearerToken:'demo-token'});
- add('samples_http','تست ارسال Cookie header','GET',h+'/cookies','none','','none',{},[{key:'Cookie',value:'session=apix-test; theme=dark',enabled:true}]);
- add('samples_http','تست Set-Cookie در پاسخ','GET',h+'/response-headers?Set-Cookie=apix_test%3D1%3B%20Path%3D%2F');
- add('samples_http','پاسخ 201 · Created','GET',h+'/status/201');
- add('samples_http','پاسخ 401 · Unauthorized','GET',h+'/status/401');
- add('samples_http','پاسخ 403 · Forbidden','GET',h+'/status/403');
- add('samples_http','پاسخ 404 · Not Found','GET',h+'/status/404');
- add('samples_http','پاسخ 500 · Server Error','GET',h+'/status/500');
- add('samples_http','تأخیر 2 ثانیه‌ای','GET',h+'/delay/2');
- add('samples_http','تست Query Parameters','GET',h+'/get?name=ApiX&version=1.9.3&debug=true');
- add('samples_http','ارسال JSON با POST','POST',h+'/post','json',JSON.stringify({app:'ApiX',type:'json',active:true},null,2));
- add('samples_http','ارسال داده با PUT','PUT',h+'/put','json',JSON.stringify({id:10,status:'updated'},null,2));
- add('samples_http','ارسال داده با PATCH','PATCH',h+'/patch','json',JSON.stringify({status:'patched'},null,2));
- const t='https://api.testingapis.com/api';
- add('samples_http','Echo کامل درخواست · GET','GET',t+'/echo?source=ApiX&tag=one&tag=two');
- add('samples_http','Echo بدنه JSON · POST','POST',t+'/echo','json',JSON.stringify({app:'ApiX',message:'Hello API'},null,2));
- add('samples_http','Bearer Token معتبر · 200','GET',t+'/auth/bearer','none','','bearer',{bearerToken:'apibee-token-123'});
- add('samples_http','دسترسی محدود · 403','GET',t+'/auth/roles/admin','none','','bearer',{bearerToken:'user-token'});
- const addUploadTool=(name,description,url=t+'/echo')=>{if(!c.some(x=>x.folderId==='samples_upload'&&x.name===name))c.push({id:'sample_upload_'+Math.random().toString(36).slice(2,9),folderId:'samples_upload',name,uploadTool:true,req:{method:'POST',url,description}})};
- addUploadTool('ارسال یک فایل','یک فایل انتخاب کن و پاسخ سرور را بررسی کن.');
- addUploadTool('ارسال چند فایل','چند فایل انتخاب کن تا نام، نوع و حجم هرکدام بررسی شود.');
- addUploadTool('فایل همراه فیلدهای متنی','فایل را همراه فیلدهای title و description ارسال کن.');
- addUploadTool('ارسال با نام فیلد دلخواه','نام فیلد فایل را از file به image یا document تغییر بده.');
- addUploadTool('بررسی multipart و SHA-256','فایل را ارسال کن تا سرور اندازه و هش SHA-256 را برگرداند.',t+'/bodies/form');
- addUploadTool('آزمایش فایل بزرگ تا ۱۰ مگابایت','برای بررسی آپلود فایل‌های بزرگ‌تر از endpoint اندازه‌گیری استفاده کن.',t+'/bodies/large');
+ const categories=[
+ ['samples_public_rest','REST API های عمومی'],['samples_http_methods','متدها و پروتکل HTTP'],['samples_auth','Authentication و Authorization'],['samples_data_formats','فرمت‌های داده و پاسخ'],['samples_params','پارامترها، فیلتر و Pagination'],['samples_errors','خطاها و شرایط خاص'],['samples_graphql','GraphQL'],['samples_websocket','WebSocket'],['samples_public_data','API های عمومی داده‌محور'],['samples_security','امنیت و CORS'],['samples_performance','زمان پاسخ و حجم داده'],['samples_chaining','سناریوهای زنجیره‌ای']
+ ];
+ categories.forEach(([id,name])=>ensure(id,name));
+ const jp='https://jsonplaceholder.typicode.com',hb='https://httpbin.org',pm='https://postman-echo.com',dj='https://dummyjson.com';
+ const j=(folder,name,method,url,body)=>add(folder,name,method,url,body?{bodyMode:'json',body:JSON.stringify(body,null,2)}:{});
+ [
+ ['همه پست‌ها','GET','/posts'],['پست شماره 1','GET','/posts/1'],['پست‌های کاربر 1','GET','/posts?userId=1'],['کامنت‌های پست 1','GET','/comments?postId=1'],['آلبوم‌ها','GET','/albums'],['تصاویر آلبوم 1','GET','/photos?albumId=1'],['کاربران','GET','/users'],['Todo های کاربر 1','GET','/todos?userId=1']
+ ].forEach(x=>j('samples_jsonplaceholder',x[0]+' · '+x[1],x[1],jp+x[2]));
+ j('samples_jsonplaceholder','ساخت پست · POST','POST',jp+'/posts',{title:'ApiX sample',body:'POST sample request',userId:1});
+ j('samples_jsonplaceholder','جایگزینی پست · PUT','PUT',jp+'/posts/1',{id:1,title:'Updated title',body:'Updated body',userId:1});
+ j('samples_jsonplaceholder','ویرایش جزئی پست · PATCH','PATCH',jp+'/posts/1',{title:'Patched title'});
+ j('samples_jsonplaceholder','حذف پست · DELETE','DELETE',jp+'/posts/1');
+ j('samples_jsonplaceholder','ساخت کامنت · POST','POST',jp+'/comments',{postId:1,name:'ApiX',email:'dev@example.com',body:'Sample comment'});
+ [
+ ['محصولات','/products'],['محصول با شناسه','/products/1'],['جست‌وجوی محصولات','/products/search?q=phone'],['دسته‌بندی محصولات','/products/category-list'],['کاربران','/users'],['پست‌ها','/posts'],['Todo ها','/todos']
+ ].forEach(x=>add('samples_public_rest',x[0]+' · GET','GET',dj+x[1]));
+ j('samples_public_rest','ساخت محصول · POST','POST',dj+'/products/add',{title:'ApiX Demo Product',price:99});
+ j('samples_public_rest','ویرایش محصول · PUT','PUT',dj+'/products/1',{title:'Updated ApiX Product',price:120});
+ add('samples_public_rest','حذف محصول · DELETE','DELETE',dj+'/products/1');
+ j('samples_public_rest','ورود آزمایشی · POST','POST',dj+'/auth/login',{username:'emilys',password:'emilyspass',expiresInMins:30});
+ add('samples_public_rest','کاربر جاری · GET','GET',dj+'/auth/me',{headers:[{key:'Authorization',value:'Bearer {{token}}',enabled:true}],description:'پس از Login توکن را در متغیر محیطی token ذخیره کن'});
+ [
+ ['نمایش هدرهای درخواست','/headers'],['Cookie ها','/cookies'],['پاسخ JSON','/json'],['پاسخ HTML','/html'],['پاسخ XML','/xml'],['متن ساده','/robots.txt'],['تأخیر 2 ثانیه','/delay/2'],['Redirect دو مرحله‌ای','/redirect/2'],['پاسخ 204','/status/204']
+ ].forEach(x=>add('samples_http','HTTP · '+x[0],'GET',hb+x[1]));
+ [200,201,202,301,302,400,401,403,404,405,418,429,500,502,503].forEach(n=>add('samples_http','Status '+n+' · HTTP','GET',hb+'/status/'+n,{status:n,description:'بررسی پاسخ HTTP با کد وضعیت '+n}));
+ add('samples_http','Bearer Token','GET',hb+'/bearer',{auth:'bearer',authValues:{bearerToken:'demo-token'}});
+ add('samples_http','Cookie Header','GET',hb+'/cookies',{headers:[{key:'Cookie',value:'session=apix-test; theme=dark',enabled:true}]});
+ add('samples_http','Set-Cookie در پاسخ','GET',hb+'/response-headers?Set-Cookie=apix_test%3D1%3B%20Path%3D%2F');
+ add('samples_http','Echo کامل درخواست','GET','https://api.testingapis.com/api/echo?source=ApiX&tag=one&tag=two');
+ j('samples_http','Echo JSON · POST','POST','https://api.testingapis.com/api/echo',{app:'ApiX',message:'Hello API'});
+ add('samples_http','Bearer آزمایشی · 200','GET','https://api.testingapis.com/api/auth/bearer',{auth:'bearer',authValues:{bearerToken:'apibee-token-123'}});
+ add('samples_http','محدودیت دسترسی · 403','GET','https://api.testingapis.com/api/auth/roles/admin',{auth:'bearer',authValues:{bearerToken:'user-token'}});
+ [
+ ['GET','get'],['POST','post'],['PUT','put'],['PATCH','patch'],['DELETE','delete'],['HEAD','get'],['OPTIONS','get']
+ ].forEach(([method,path])=>add('samples_http_methods',method+' · Postman Echo',method,pm+'/'+path,{bodyMode:['POST','PUT','PATCH'].includes(method)?'json':'none',body:['POST','PUT','PATCH'].includes(method)?JSON.stringify({app:'ApiX',method},null,2):'',headers:method==='OPTIONS'?[{key:'Origin',value:'https://example.com',enabled:true},{key:'Access-Control-Request-Method',value:'POST',enabled:true}]:[]}));
+ add('samples_auth','Basic Auth','GET',hb+'/basic-auth/apix/demo-password',{auth:'basic',authValues:{basicUser:'apix',basicPass:'demo-password'}});
+ add('samples_auth','Bearer بدون توکن','GET',hb+'/bearer');
+ add('samples_auth','API Key در Header','GET',hb+'/get',{headers:[{key:'X-API-Key',value:'YOUR_API_KEY',enabled:true}],description:'YOUR_API_KEY را با کلید خودت جایگزین کن'});
+ add('samples_auth','API Key در Query','GET',hb+'/get?api_key=YOUR_API_KEY',{description:'نمونه آموزشی؛ قراردادن کلید واقعی در URL امن نیست'});
+ add('samples_auth','توکن متغیرمحور','GET',hb+'/bearer',{headers:[{key:'Authorization',value:'Bearer {{access_token}}',enabled:true}]});
+ add('samples_data_formats','ارسال متن Raw','POST',hb+'/post',{bodyMode:'raw',body:'Hello from ApiX',headers:[{key:'Content-Type',value:'text/plain',enabled:true}]});
+ j('samples_data_formats','JSON با متن فارسی','POST',hb+'/post',{fa:'سلام دنیا',emoji:'🚀',number:123});
+ add('samples_data_formats','Form URL Encoded','POST',hb+'/post',{bodyMode:'form',description:'در تب Body نوع Form URL Encoded را انتخاب و فیلد اضافه کن'});
+ add('samples_params','Path Parameter','GET',dj+'/users/1');
+ add('samples_params','Query چندمقداری','GET',hb+'/get?tag=android&tag=api&tag=testing');
+ add('samples_params','URL Encoding فارسی','GET',hb+'/get?search=%D8%A2%D8%B2%D9%85%D8%A7%DB%8C%D8%B4+API');
+ add('samples_params','Pagination صفحه اول','GET',dj+'/posts?limit=10&skip=0');
+ add('samples_params','Pagination صفحه دوم','GET',dj+'/posts?limit=10&skip=10');
+ add('samples_params','Pagination کاربران','GET',dj+'/users?limit=5&skip=5&select=firstName,lastName,email');
+ add('samples_params','Sorting صعودی','GET',dj+'/products?sortBy=title&order=asc');
+ add('samples_params','Filtering کاربر','GET',jp+'/posts?userId=2');
+ [[400,'Bad Request'],[401,'Unauthorized'],[403,'Forbidden'],[404,'Not Found'],[500,'Server Error'],[503,'Service Unavailable']].forEach(([n,label])=>add('samples_errors',n+' · '+label,'GET',hb+'/status/'+n,{status:n}));
+ add('samples_errors','Timeout ده ثانیه‌ای','GET',hb+'/delay/10',{description:'Timeout درخواست را کمتر از ۱۰ ثانیه تنظیم کن'});
+ add('samples_errors','JSON خراب','POST',hb+'/post',{bodyMode:'raw',body:'{"broken": true,,}',headers:[{key:'Content-Type',value:'application/json',enabled:true}]});
+ add('samples_errors','بدنه خالی','POST',hb+'/post');
+ add('samples_graphql','GraphQL فهرست کشورها','POST','https://countries.trevorblades.com/',{bodyMode:'json',body:JSON.stringify({query:'query { countries { code name capital } }'},null,2),headers:[{key:'Content-Type',value:'application/json',enabled:true}]});
+ add('samples_graphql','GraphQL متغیرها','POST','https://countries.trevorblades.com/',{bodyMode:'json',body:JSON.stringify({query:'query Country($code: ID!) { country(code: $code) { code name emoji } }',variables:{code:'DE'}},null,2),headers:[{key:'Content-Type',value:'application/json',enabled:true}]});
+ add('samples_graphql','GraphQL خطای Query','POST','https://countries.trevorblades.com/',{bodyMode:'json',body:JSON.stringify({query:'query { unknownField }'},null,2)});
+ add('samples_websocket','اتصال WebSocket Echo','GET','wss://ws.postman-echo.com/raw',{description:'در صفحه درخواست حالت WebSocket را انتخاب و اتصال را بزن'});
+ add('samples_websocket','پیام JSON روی WebSocket','GET','wss://ws.postman-echo.com/raw',{description:'پس از اتصال پیام {"type":"ping","from":"ApiX"} را ارسال کن'});
+ [
+ ['REST Countries · آلمان','https://restcountries.com/v3.1/name/germany'],['REST Countries · همه کشورها','https://restcountries.com/v3.1/all?fields=name,capital,cca2'],['Open-Meteo · هوای تهران','https://api.open-meteo.com/v1/forecast?latitude=35.6892&longitude=51.3890&current=temperature_2m,wind_speed_10m&timezone=auto'],['Dog CEO · تصویر تصادفی','https://dog.ceo/api/breeds/image/random'],['Cat Fact','https://catfact.ninja/fact'],['Random User','https://randomuser.me/api/?results=5'],['PokeAPI · Pikachu','https://pokeapi.co/api/v2/pokemon/pikachu'],['PokeAPI · Berry','https://pokeapi.co/api/v2/berry/1']
+ ].forEach(x=>add('samples_public_data',x[0],'GET',x[1]));
+ add('samples_security','هدرهای امنیتی پاسخ','GET',hb+'/response-headers?X-Content-Type-Options=nosniff&X-Frame-Options=DENY&Referrer-Policy=no-referrer');
+ add('samples_security','CORS Response Headers','GET',hb+'/response-headers?Access-Control-Allow-Origin=https%3A%2F%2Fexample.com&Access-Control-Allow-Methods=GET%2CPOST');
+ add('samples_security','Origin سفارشی','GET',hb+'/get',{headers:[{key:'Origin',value:'https://example.com',enabled:true}]});
+ j('samples_security','رشته‌های امنیتی به‌عنوان داده','POST',hb+'/post',{input:"<script>alert('xss')</script>",quote:"' OR '1'='1",note:'فقط داده آزمایشی؛ اجرا نمی‌شود'});
+ add('samples_performance','اندازه‌گیری پاسخ سریع','GET',hb+'/get');
+ add('samples_performance','تأخیر یک ثانیه','GET',hb+'/delay/1');
+ add('samples_performance','تأخیر پنج ثانیه','GET',hb+'/delay/5');
+ add('samples_performance','پاسخ حجیم 100KB','GET',hb+'/bytes/102400');
+ add('samples_performance','پاسخ حجیم 1MB','GET',hb+'/bytes/1048576');
+ add('samples_chaining','مرحله 1 · دریافت کاربر','GET',jp+'/users/1');
+ add('samples_chaining','مرحله 2 · پست‌های کاربر','GET',jp+'/posts?userId=1',{description:'برای تمرین، شناسه کاربر را از پاسخ مرحله قبل در URL قرار بده'});
+ add('samples_chaining','مرحله 3 · کامنت‌ها','GET',jp+'/comments?postId=1');
+ const upload=(name,description,url='https://api.testingapis.com/api/echo')=>{if(!c.some(x=>x.folderId==='samples_upload'&&x.name===name))c.push({id:'sample_upload_'+Math.random().toString(36).slice(2,9),folderId:'samples_upload',name,uploadTool:true,req:{method:'POST',url,description}})};
+ upload('ارسال یک فایل','یک فایل انتخاب کن و پاسخ سرور را بررسی کن.');
+ upload('ارسال چند فایل','چند فایل انتخاب کن تا نام، نوع و حجم هرکدام بررسی شود.');
+ upload('فایل همراه فیلدهای متنی','فایل را همراه فیلدهای title و description ارسال کن.');
+ upload('ارسال با نام فیلد دلخواه','نام فیلد فایل را از file به image یا document تغییر بده.');
+ upload('بررسی multipart و SHA-256','سرور اندازه و هش SHA-256 را برمی‌گرداند.','https://api.testingapis.com/api/bodies/form');
+ upload('آزمایش فایل بزرگ تا ۱۰ مگابایت','برای بررسی آپلود فایل‌های بزرگ‌تر از endpoint اندازه‌گیری استفاده کن.','https://api.testingapis.com/api/bodies/large');
  store.set('folders',fs);store.set('collections',c);
 }
 function init(){seedSamples();setRows('paramsRows',[]);setRows('headerRows',[{key:'Accept',value:'application/json'},{key:'Content-Type',value:'application/json'}]);setRows('formRows',[]);renderAuth();renderHistory();renderCollections();renderEnvironments();$('collectionsPage').classList.add('hide');$('environmentsPage').classList.add('hide');$('historyPage').classList.add('hide');$('toolsPage').classList.add('hide');renderTestRuns();$('pendingId').value=''}
 window.BehnamTester={onResult,back,onUploadFilesSelected,onUploadResult};document.addEventListener('DOMContentLoaded',async()=>{await initializeApiXStorage();init()});
 </script>
 <div id="historyPage" class="layout hide"><div class="section-head">تاریخچه درخواست‌ها</div><div id="historyFull"></div></div>
-<div id="collectionsPage" class="layout hide"><div class="section-head">مجموعه‌ها <div class="row" style="flex:0 0 auto"><button class="ghost tiny" onclick="exportCollections()">خروجی</button><button class="ghost tiny" onclick="importCollections()">ورود</button><button class="primary tiny" onclick="createFolder()">＋ پوشه اصلی</button></div></div><div class="notice">مجموعه «API های تستی» شامل نمونه‌های JSONPlaceholder، تست‌های HTTP و احراز هویت، و سناریوهای آپلود فایل است. اجرای مجموعه، درخواست‌ها را به‌ترتیب می‌فرستد. دکمه «اجرای داده‌ای» مجموعه را با چند ردیف ورودی JSON اجرا می‌کند؛ متغیرهای هر ردیف با قالب {{userId}} در URL، هدر، بدنه و اسکریپت قابل استفاده‌اند و زنجیره درخواست‌ها برای هر ردیف از ابتدا شروع می‌شود. برای زنجیره‌کردن درخواست‌ها، خروجی درخواست قبلی را با متغیرهایی مثل <bdi dir="ltr">{{prev.access_token}}</bdi>، <bdi dir="ltr">{{prev.status}}</bdi> یا <bdi dir="ltr">{{prev.raw}}</bdi> در درخواست بعدی استفاده کن.</div><div id="collectionsList"></div></div>
+<div id="collectionsPage" class="layout hide"><div class="section-head">مجموعه‌ها <div class="row" style="flex:0 0 auto"><button class="ghost tiny" onclick="exportCollections()">خروجی</button><button class="ghost tiny" onclick="importCollections()">ورود</button><button class="primary tiny" onclick="createFolder()">＋ پوشه اصلی</button></div></div><div class="notice">کتابخانه API های تستی شامل REST API، متدهای HTTP، احراز هویت، فرمت داده، Pagination، خطاها، GraphQL، WebSocket، API های عمومی، امنیت، کارایی و آپلود فایل است. تست‌ها را می‌توانی اجرا، ویرایش و به مجموعه‌های شخصی خودت کپی کنی. اجرای مجموعه، درخواست‌ها را به‌ترتیب می‌فرستد. دکمه «اجرای داده‌ای» مجموعه را با چند ردیف ورودی JSON اجرا می‌کند؛ متغیرهای هر ردیف با قالب {{userId}} در URL، هدر، بدنه و اسکریپت قابل استفاده‌اند و زنجیره درخواست‌ها برای هر ردیف از ابتدا شروع می‌شود. برای زنجیره‌کردن درخواست‌ها، خروجی درخواست قبلی را با متغیرهایی مثل <bdi dir="ltr">{{prev.access_token}}</bdi>، <bdi dir="ltr">{{prev.status}}</bdi> یا <bdi dir="ltr">{{prev.raw}}</bdi> در درخواست بعدی استفاده کن.</div><div id="collectionsList"></div></div>
 <div id="environmentsPage" class="layout hide"><div class="section-head">مدیریت محیط‌ها <button class="primary tiny" onclick="editEnv(-1)">＋ محیط جدید</button></div><div class="env-toolbar"><button class="ghost" onclick="exportEnvironments()">خروجی گرفتن</button><button class="ghost" onclick="importEnvironments()">وارد کردن</button></div><div id="envList"></div><div class="section-head" style="margin-top:18px">متغیرهای سراسری <small>در تمام محیط‌ها در دسترس</small></div><div class="notice">متغیرهای این بخش مستقل از محیط فعال هستند و با همان قالب {{api_version}} در درخواست‌ها استفاده می‌شوند.</div><div id="globalVarsList"></div><button class="add" onclick="addGlobalVar()">＋ افزودن متغیر سراسری</button><button class="primary" style="width:100%;margin:5px 0 12px" onclick="saveGlobalVars()">ذخیره متغیرهای سراسری</button><div class="notice">متغیر محلی اولویت بالاتری از متغیر محیطی دارد؛ متغیر محیطی هم بر متغیر سراسری اولویت دارد. متغیرها در URL، پارامترها، هدرها، Authorization، بدنه و WebSocket قابل استفاده‌اند.</div></div>
 <div id="toolsPage" class="layout hide"><div class="section-head">ابزارهای توسعه ApiX <small>Developer Toolkit</small></div><div class="tool-grid"><div class="tool-card"><h3>File Upload</h3><p>ارسال فایل و فیلدهای فرم به API با multipart/form-data.</p><button onclick="openUpload()">باز کردن آپلود</button></div><div class="tool-card"><h3>Code Generator</h3><p>تبدیل درخواست فعلی به کد قابل استفاده در پروژه.</p><button onclick="openCodeGenerator()">تولید کد</button></div><div class="tool-card"><h3>JWT Decoder</h3><p>خواندن Header و Payload توکن JWT بدون اعتبارسنجی امضا.</p><button onclick="openJwtDecoder()">باز کردن ابزار</button></div><div class="tool-card"><h3>Response Search</h3><p>جست‌وجو در پاسخ آخر و پیدا کردن کلید یا مقدار دلخواه.</p><button onclick="focusResponseSearch()">جست‌وجو در پاسخ</button></div><div class="tool-card"><h3>Collection Transfer</h3><p>انتقال مجموعه‌ها و درخواست‌ها با فایل JSON.</p><button onclick="exportCollections()">خروجی گرفتن</button><button class="ghost" style="margin-top:6px" onclick="importCollections()">وارد کردن</button></div><div class="tool-card"><h3>Request Chaining</h3><p>در اجرای گروهی، خروجی هر درخواست در درخواست بعدی قابل استفاده است.</p><div class="tiny ltr">{{prev.access_token}} · {{prev.status}} · {{prev.raw}}</div></div><div class="tool-card"><h3>Data-Driven Runner</h3><p>اجرای مجموعه با چندین ردیف ورودی JSON و گزارش تفکیکی.</p><button onclick="goPage('collections')">رفتن به مجموعه‌ها</button></div></div><div class="section-head" style="margin-top:18px">JWT Decoder</div><div class="field"><label>توکن JWT</label><textarea id="jwtInput" placeholder="eyJhbGciOi..." spellcheck="false"></textarea></div><button class="primary" onclick="decodeJwt()">Decode JWT</button><div class="field" style="margin-top:12px"><label>Header</label><pre id="jwtHeader" class="tool-output">—</pre></div><div class="field"><label>Payload</label><pre id="jwtPayload" class="tool-output">—</pre></div><div id="jwtInfo" class="notice">Decode فقط ساختار توکن را می‌خواند؛ امضای JWT را تأیید نمی‌کند.</div><div class="section-head" style="margin-top:20px">گزارش اجرای تست‌ها <small id="testRunCount">0 اجرا</small></div>
 <div class="test-run-toolbar"><button class="primary" onclick="compareLatestTestRuns()">مقایسه دو اجرای آخر</button><button class="danger" onclick="clearTestRuns()">پاک‌کردن گزارش‌ها</button></div>
