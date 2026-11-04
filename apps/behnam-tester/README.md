@@ -1,6 +1,6 @@
 # ApiX
 
-**ApiX 1.8.0** is an Android API client for developers, built with Kotlin, OkHttp and a local HTML interface.
+**ApiX 1.8.6** is an Android API client for developers, built with Kotlin, OkHttp and a local HTML interface.
 
 ## Features
 - REST API, GraphQL and WebSocket clients
@@ -22,6 +22,8 @@
 - Code generator for JavaScript Fetch, Python Requests and PHP cURL
 - cURL import/export
 - Pre-request and response test scripts
+- Response streaming with a 5 MB display limit to protect device memory; oversized text responses are marked as truncated
+- Hardened WebView navigation and disabled mixed-content / file-URL cross-origin access
 - Local persistence; no external CDN or remote UI dependencies
 
 ## Build
