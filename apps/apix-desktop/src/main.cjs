@@ -112,7 +112,7 @@ ipcMain.handle('apix:action', async (_event, action, ...args) => {
     tx(); return records.length;
   }
   if (action === 'sendRequest') return sendRequest(args[0]);
-  if (action === 'wsConnect') return connectWs(args[0]);
+  if (action === 'wsConnect') { try { return connectWs(args[0]); } catch(e) { let id='';try{id=JSON.parse(args[0]).id||'';}catch{} emit('onWebSocketEvent',JSON.stringify({id,event:'error',error:e.message}));return false; } }
   if (action === 'wsSend') { const ws=sockets.get(args[0]); if (!ws || ws.readyState!==WebSocket.OPEN) return false; ws.send(args[1]); return true; }
   if (action === 'wsClose') { const ws=sockets.get(args[0]); if (ws) ws.close(args[1] || 1000,args[2] || 'Closed'); sockets.delete(args[0]); return true; }
   if (action === 'chooseOpenApiFile' || action === 'chooseJsonFile' || action === 'chooseBackupFile') {
