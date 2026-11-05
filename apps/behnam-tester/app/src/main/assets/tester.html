@@ -109,6 +109,77 @@
 .appbar .bar-actions button{white-space:nowrap}
 @media(max-width:390px){.appbar{align-items:flex-start}.appbar .brand{flex:1 1 100%;width:100%}.appbar .bar-actions{flex:1 1 100%;width:100%;justify-content:flex-start}.appbar .bar-actions button{flex:1}}
 
+
+/* Header layout: subtitle stays under ApiX; actions never overlap it */
+.appbar{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  column-gap:10px;
+  row-gap:0;
+  height:auto;
+  min-height:58px;
+  padding:8px 12px;
+}
+.appbar .brand{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  width:auto;
+  flex:initial;
+}
+.appbar .brand-mark{flex:0 0 32px}
+.appbar .brand-copy{
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+  justify-content:center;
+  align-items:flex-start;
+  gap:2px;
+  min-width:0;
+  max-width:100%;
+}
+.appbar .brand-copy strong{display:block;line-height:1.15}
+.appbar .brand-copy small{
+  position:static;
+  display:block;
+  margin:0;
+  max-width:100%;
+  font-size:8px;
+  line-height:1.25;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:normal;
+  direction:ltr;
+  text-align:left;
+}
+.appbar .bar-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  flex:0 0 auto;
+  flex-wrap:nowrap;
+  gap:4px;
+  min-width:0;
+}
+.appbar .bar-actions button{
+  flex:0 0 auto;
+  min-width:0;
+  padding:6px 7px;
+  font-size:11px;
+  line-height:1.2;
+  white-space:nowrap;
+}
+@media(max-width:360px){
+  .appbar{column-gap:6px;padding-inline:8px}
+  .appbar .brand{gap:6px}
+  .appbar .brand-mark{width:29px;height:29px;flex-basis:29px}
+  .appbar .brand-copy small{font-size:7px}
+  .appbar .bar-actions{gap:3px}
+  .appbar .bar-actions button{padding:5px 5px;font-size:10px}
+}
+
 </style>
 </head>
 <body>
