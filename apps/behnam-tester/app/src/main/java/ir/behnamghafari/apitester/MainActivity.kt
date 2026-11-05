@@ -894,7 +894,7 @@ class MainActivity : Activity() {
                 pendingSqliteRestoreFile = null
                 file.delete()
                 JSONObject().put("ok", true).put("count", count).put("folders", folderCount)
-                    .put("collections", collectionCount).put("snapshot", JSONArray(getStorageSnapshot())).toString()
+                    .put("collections", collectionCount).toString()
             } catch (e: Exception) {
                 JSONObject().put("ok", false).put("error", e.message ?: e.javaClass.simpleName).toString()
             }
@@ -1131,6 +1131,9 @@ class MainActivity : Activity() {
                         return
                     }
                     val source = android.database.sqlite.SQLiteDatabase.openDatabase(file.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+                    source.rawQuery("PRAGMA quick_check", null).use { cursor ->
+                        require(cursor.moveToFirst() && cursor.getString(0).equals("ok", true)) { "ساختار فایل SQLite سالم نیست" }
+                    }
                     var count = 0
                     var folders = 0
                     var collections = 0
