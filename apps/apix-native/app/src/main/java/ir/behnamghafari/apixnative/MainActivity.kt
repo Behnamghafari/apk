@@ -90,7 +90,8 @@ private fun ApiXScreen(
     val authTypes = listOf("none", "bearer", "basic", "apikey")
     val bodyTypes = listOf("none", "json", "raw", "form")
 
-    var curlInput by remember { mutableStateOf("") }\n    var method by remember { mutableStateOf("GET") }
+    var curlInput by remember { mutableStateOf("") }
+    var method by remember { mutableStateOf("GET") }
     var methodMenuOpen by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("https://httpbin.org/get") }
     var params by remember { mutableStateOf("") }
