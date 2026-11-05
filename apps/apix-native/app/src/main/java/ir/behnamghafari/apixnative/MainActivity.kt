@@ -40,7 +40,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ir.behnamghafari.apixnative.data.collection.PostmanCollectionCodec
-import ir.behnamghafari.apixnative.data.importer.CurlCommandParser\nimport ir.behnamghafari.apixnative.data.model.ApiEnvironment
+import ir.behnamghafari.apixnative.data.importer.CurlCommandParser
+import ir.behnamghafari.apixnative.data.model.ApiEnvironment
 import ir.behnamghafari.apixnative.data.model.SavedRequest
 import ir.behnamghafari.apixnative.data.network.HttpKeyValue
 import ir.behnamghafari.apixnative.data.network.HttpRequestEngine
