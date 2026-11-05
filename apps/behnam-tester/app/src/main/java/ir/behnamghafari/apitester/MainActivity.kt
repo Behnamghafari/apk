@@ -824,7 +824,7 @@ class MainActivity : Activity() {
                     backup?.delete()
                     runOnUiThread {
                         Toast.makeText(this@MainActivity, "ساخت بکاپ SQLite ناموفق بود: " + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
-                        if (::web.isInitialized) web.evaluateJavascript("window.onBackupSaved && window.onBackupSaved('{\\"ok\\":false}')", null)
+                        if (::web.isInitialized) web.evaluateJavascript("window.onBackupSaved && window.onBackupSaved(" + JSONObject.quote(JSONObject().put("ok", false).toString()) + ")", null)
                     }
                 }
             }.start()
@@ -1089,7 +1089,7 @@ class MainActivity : Activity() {
                     if (::web.isInitialized) web.evaluateJavascript("window.onBackupSaved && window.onBackupSaved(" + JSONObject.quote(result.toString()) + ")", null)
                 } catch (e: Exception) {
                     Toast.makeText(this, "ذخیره فایل SQLite ناموفق بود: " + e.message, Toast.LENGTH_LONG).show()
-                    if (::web.isInitialized) web.evaluateJavascript("window.onBackupSaved && window.onBackupSaved('{\\"ok\\":false}')", null)
+                    if (::web.isInitialized) web.evaluateJavascript("window.onBackupSaved && window.onBackupSaved(" + JSONObject.quote(JSONObject().put("ok", false).toString()) + ")", null)
                 } finally { file.delete() }
             } else { file?.delete() }
             return
