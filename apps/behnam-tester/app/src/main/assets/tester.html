@@ -749,7 +749,15 @@ function collectFullBackupRecords(){
  ['folders','collections'].forEach(name=>{const value=store.get(name,[]);if(Array.isArray(value))merged.set('bt_'+name,value)});
  return [...merged.entries()].map(([key,value])=>({key,value}));
 }
-function createFullBackup(){try{BehnamNative.createSqliteBackup();BehnamNative.toast('در حال ساخت نسخه پشتیبان SQLite از پایگاه داده ApiX…')}catch(e){BehnamNative.toast('ساخت بکاپ SQLite ناموفق بود: '+(e.message||e))}}
+function createFullBackup(){try{
+ const records=collectFullBackupRecords();
+ if(!Array.isArray(records)||!records.length)throw Error('اطلاعاتی برای پشتیبان‌گیری پیدا نشد');
+ const synced=Number(BehnamNative.replaceStorageSnapshot(JSON.stringify(records)));
+ if(synced!==records.length)throw Error('همگام‌سازی اطلاعات با SQLite کامل نشد');
+ storeCache.clear();records.forEach(row=>storeCache.set(row.key,row.value));
+ BehnamNative.createSqliteBackup();
+ BehnamNative.toast('در حال ساخت فایل واقعی SQLite؛ '+records.length+' رکورد بررسی شد…');
+ }catch(e){BehnamNative.toast('ساخت بکاپ SQLite ناموفق بود: '+(e.message||e))}}
  function onBackupSaved(result){try{const info=JSON.parse(result||'{}');if(!info.ok){BehnamNative.toast('ذخیره بکاپ انجام نشد');return}const location=info.path||info.uri||info.name||'Download';BehnamNative.toast('بکاپ ذخیره شد: '+location);const box=$('backupLocationInfo');if(box){box.classList.remove('hide');box.textContent='آخرین بکاپ: '+location}}catch(e){BehnamNative.toast('بکاپ ذخیره شد؛ مسیر فایل در انتخاب‌گر اندروید مشخص است')}}
 function onSqliteBackupSelected(raw){
  try{
@@ -770,8 +778,14 @@ async function confirmFullBackupRestore(){
   if(pendingSqliteRestoreInfo){
    const result=JSON.parse(BehnamNative.restoreSqliteBackup()||'{}');
    if(!result.ok)throw Error(result.error||'بازیابی فایل SQLite انجام نشد');
-   storeCache.clear();
-   folders=Number(result.folders)||0;collections=Number(result.collections)||0;count=Number(result.count)||0;
+   count=Number(result.count)||0;folders=Number(result.folders)||0;collections=Number(result.collections)||0;
+   const verified=JSON.parse(BehnamNative.getStorageSnapshot()||'[]');
+   if(!Array.isArray(verified)||verified.length!==count)throw Error('تعداد رکوردهای دیتابیس پس از بازیابی با فایل بکاپ برابر نیست');
+   const restored=new Map(verified.map(row=>[row.key,row.value]));
+   const actualFolders=Array.isArray(restored.get('bt_folders'))?restored.get('bt_folders').length:0;
+   const actualCollections=Array.isArray(restored.get('bt_collections'))?restored.get('bt_collections').length:0;
+   if(actualFolders!==folders||actualCollections!==collections)throw Error('راستی‌آزمایی پوشه‌ها و مجموعه‌ها ناموفق بود');
+   storeCache.clear();verified.forEach(row=>storeCache.set(row.key,row.value));
   }else if(Array.isArray(pendingFullBackupRecords)){
    const records=pendingFullBackupRecords.slice(),expected=new Map(records.map(x=>[x.key,x.value]));
    count=BehnamNative.replaceStorageSnapshot(JSON.stringify(records));
@@ -924,7 +938,7 @@ function wsConnect(isReconnect=false){
  wsLog((isReconnect?'RECONNECT #'+wsReconnectAttempt:'CONNECT')+' '+address);
  BehnamNative.wsConnect(JSON.stringify({id:wsConnectionId,...wsCurrentConfig}));
 }
-function onWebSocketEvent(raw){let e;try{e=JSON.parse(raw)}catch(_){return}if(e.id!==wsConnectionId)return;if(e.event==='open'){$('wsState').textContent='متصل';wsReconnectAttempt=0;wsLog('اتصال برقرار شد · '+(e.protocol||'WebSocket'))}else if(e.event==='message'){const message=e.message??'[پیام خالی]';wsLog('← '+message+(e.truncated?' … [پیام برای جلوگیری از مصرف حافظه کوتاه شد]':''),'received',{payload:message,truncated:!!e.truncated,originalChars:e.originalChars||0})}else if(e.event==='closing'){$('wsState').textContent='در حال قطع…';wsLog('در حال بستن اتصال')}else if(e.event==='closed'){$('wsState').textContent='قطع';wsLog('اتصال بسته شد · code='+e.code+(e.reason?' · '+e.reason:''));scheduleWsReconnect()}else if(e.event==='failure'){$('wsState').textContent='خطا';const code=e.httpCode?(' · HTTP '+e.httpCode):'';const body=e.responseBody?('\\nپاسخ سرور: '+e.responseBody):'';const cause=e.cause?('\\nجزئیات: '+e.cause):'';wsLog('خطای اتصال: '+(e.error||'Unknown error')+code+body+cause,'error');scheduleWsReconnect()}}
+function onWebSocketEvent(raw){let e;try{e=JSON.parse(raw)}catch(_){return}if(e.id!==wsConnectionId)return;if(e.event==='connecting'){$('wsState').textContent='در حال اتصال…';wsLog('درخواست اتصال ارسال شد · '+(e.url||''))}else if(e.event==='open'){$('wsState').textContent='متصل';wsReconnectAttempt=0;wsLog('اتصال برقرار شد · HTTP '+(e.httpCode||101)+' · '+(e.protocol||'WebSocket'))}else if(e.event==='message'){const message=e.message??'[پیام خالی]';wsLog('← '+message+(e.truncated?' … [پیام برای جلوگیری از مصرف حافظه کوتاه شد]':''),'received',{payload:message,truncated:!!e.truncated,originalChars:e.originalChars||0})}else if(e.event==='closing'){$('wsState').textContent='در حال قطع…';wsLog('در حال بستن اتصال')}else if(e.event==='closed'){$('wsState').textContent='قطع';wsLog('اتصال بسته شد · code='+e.code+(e.reason?' · '+e.reason:''));scheduleWsReconnect()}else if(e.event==='failure'){$('wsState').textContent='خطا';const code=e.httpCode?(' · HTTP '+e.httpCode):'';const body=e.responseBody?('\\nپاسخ سرور: '+e.responseBody):'';const cause=e.cause?('\\nجزئیات: '+e.cause):'';wsLog('خطای اتصال: '+(e.error||'Unknown error')+code+body+cause,'error');scheduleWsReconnect()}}
 function scheduleWsReconnect(){if(wsManualClose||!wsCurrentConfig?.autoReconnect||wsReconnectAttempt>=wsCurrentConfig.reconnectMax)return;if(wsReconnectTimer)clearTimeout(wsReconnectTimer);const delay=Math.min(30000,1000*Math.pow(2,wsReconnectAttempt));wsLog('تلاش مجدد در '+Math.round(delay/1000)+' ثانیه');wsReconnectTimer=setTimeout(()=>{wsReconnectTimer=null;wsConnect(true)},delay)}
 function wsSend(){if(!wsConnectionId||$('wsState').textContent!=='متصل'){BehnamNative.toast('ابتدا اتصال را برقرار کن');return}const message=interpolate($('wsMessage').value);if(BehnamNative.wsSend(wsConnectionId,message))wsLog('→ '+(message||'[پیام خالی]'),'sent',{payload:message});else BehnamNative.toast('ارسال پیام انجام نشد')}
 function wsSendPing(){if(!wsConnectionId||$('wsState').textContent!=='متصل'){BehnamNative.toast('ابتدا اتصال را برقرار کن');return}const message=JSON.stringify({type:'ping',timestamp:Date.now(),client:'ApiX'});$('wsMessage').value=message;wsSend()}
