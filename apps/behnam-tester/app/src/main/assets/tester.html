@@ -860,7 +860,7 @@ function setMode(mode){
   $('jsonBody').classList.remove('hide');$('formBody').classList.add('hide');
   if(!$('bodyText').value.trim())$('bodyText').value=JSON.stringify({query:'query { countries { code name } }'},null,2);
   $('contentType').value='application/json';
- }else if(mode==='rest){
+ }else if(mode==='rest'){
   $('method').classList.remove('hide');$('sendBtn').classList.remove('hide');
  }
  if(workspaceTabs.length){
