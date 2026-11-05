@@ -12,8 +12,8 @@ android {
         applicationId = "com.behnamghafari.tester"
         minSdk = 23
         targetSdk = 35
-        versionCode = 37
-        versionName = "1.21.3"
+        versionCode = 38
+        versionName = "1.22.0"
     }
     signingConfigs {
         create("stableDebug") {
