@@ -8,7 +8,6 @@
   "scripts": {
     "start": "electron .",
     "dist:win": "electron-builder --win nsis",
-    "dist:portable": "electron-builder --win portable",
     "check": "node --check src/main.cjs && node --check src/preload.cjs && node scripts/check-html.cjs",
     "postinstall": "electron-builder install-app-deps"
   },
@@ -33,12 +32,6 @@
       "target": [
         {
           "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
           "arch": [
             "x64"
           ]
