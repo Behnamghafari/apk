@@ -184,8 +184,9 @@ function sendRequest(){activeRequestScriptsAllowed=$('allowScripts').checked;con
 function renderResponseBody(body){const text=String(body??'');try{const pretty=JSON.stringify(JSON.parse(text),null,2);const html=pretty.replace(/(?:"(?:\\.|[^"\\])*"(?=\s*:)|"(?:\\.|[^"\\])*"|\b(?:true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,(token,offset)=>{const rest=pretty.slice(offset+token.length);let cls;if(token[0]==='"')cls=/^\s*:/.test(rest)?'json-key':'json-string';else if(token==='null')cls='json-null';else if(token==='true'||token==='false')cls='json-bool';else cls='json-number';return '<span class="'+cls+'">'+esc(token)+'</span>'});$('responseBody').innerHTML=html}catch(e){$('responseBody').textContent=text}}
 function onResult(raw){
  let r;try{r=JSON.parse(raw)}catch(e){return}
- if(scenarioRun){handleScenarioResponse(r);return}
+ if(scenarioRun){if(r.id&&$('pendingId')?.value&&r.id!==$('pendingId').value)return;if(r.id&&$('pendingId')?.value===r.id)$('pendingId').value='';handleScenarioResponse(r);return}
  if(r.id&&$('pendingId')?.value&&r.id!==$('pendingId').value)return;
+ if(r.id&&$('pendingId')?.value===r.id)$('pendingId').value='';
  $('sendBtn').disabled=false;$('sendBtn').textContent='ارسال';
  if(lastResponse&&!lastResponse.error)previousResponse=lastResponse;
  lastResponse=r;
@@ -796,7 +797,7 @@ function saveScenarioFromEditor(){
 }
 function editScenarioIndex(i){const s=getScenarios()[i];if(s){$('scenarioEditor').value=JSON.stringify(s,null,2);$('scenarioEditor').scrollIntoView({behavior:'smooth',block:'center'})}}
 function deleteScenarioIndex(i){const items=getScenarios();items.splice(i,1);store.set('scenarios',items);renderScenarios()}
-function runScenarioIndex(i){const s=getScenarios()[i];if(!s)return;if(scenarioRun){BehnamNative.toast('یک سناریو در حال اجراست');return}if(!s.steps?.length)return;scenarioRun={scenario:s,index:0,vars:{},previous:null,results:[],startedAt:Date.now(),skipped:0};$('scenarioRunLog').textContent='شروع: '+s.name+'\n';$('scenarioRunState').textContent='در حال اجرا';runNextScenarioStep()}
+function runScenarioIndex(i){const s=getScenarios()[i];if(!s)return;if($('pendingId').value){BehnamNative.toast('ابتدا منتظر پایان درخواست جاری بمان');return}if(scenarioRun){BehnamNative.toast('یک سناریو در حال اجراست');return}if(!s.steps?.length)return;scenarioRun={scenario:s,index:0,vars:{},previous:null,results:[],startedAt:Date.now(),skipped:0};$('scenarioRunLog').textContent='شروع: '+s.name+'\n';$('scenarioRunState').textContent='در حال اجرا';runNextScenarioStep()}
 function scenarioValue(value,run){return String(value??'').replace(/\{\{\s*(vars|prev)(?:\.([^}]+))?\s*\}\}/g,(_,scope,path)=>{const root=scope==='vars'?run.vars:(run.previous||{});if(!path)return JSON.stringify(root);const v=path.split('.').reduce((o,k)=>o==null?undefined:o[k],root);return v==null?'':typeof v==='object'?JSON.stringify(v):String(v)})}
 function loadJsonSchemaExample(){
  const s={type:"object",required:["id","name","email"],additionalProperties:false,properties:{id:{type:"integer",minimum:1},name:{type:"string",minLength:2},email:{type:"string",format:"email"},active:{type:"boolean"},tags:{type:"array",items:{type:"string"}}}};
