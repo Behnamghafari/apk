@@ -39,6 +39,10 @@ Output: `app/build/outputs/apk/debug/app-debug.apk`
 
 The committed stable debug key exists only to preserve in-place upgrades of development builds. **It must not be used for marketplace distribution.** A commercial release still requires a separate private release/upload keystore, protected CI secrets, a signed release APK/AAB, store policy review, privacy policy and listing materials.
 
+## Privacy policy
+
+[ApiX Privacy Policy](PRIVACY.md) — Persian and English.
+
 ## Creator
 
 Behnam Ghafari — https://t.me/behnamghafari
