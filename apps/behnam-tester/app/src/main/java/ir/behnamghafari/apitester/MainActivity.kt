@@ -26,6 +26,7 @@ import java.net.Socket
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -652,9 +653,9 @@ class MainActivity : Activity() {
                     .writeTimeout(25, TimeUnit.SECONDS)
                     .pingInterval(pingSeconds.toLong(), TimeUnit.SECONDS)
                     .build()
+                val terminal = AtomicBoolean(false)
                 val socket = wsClient.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
                     override fun onOpen(webSocket: okhttp3.WebSocket, response: Response) {
-                        webSockets[id] = webSocket
                         deliverWebSocket(JSONObject().put("id", id).put("event", "open").put("protocol", response.header("Sec-WebSocket-Protocol", "")))
                     }
                     override fun onMessage(webSocket: okhttp3.WebSocket, text: String) {
@@ -671,10 +672,12 @@ class MainActivity : Activity() {
                         deliverWebSocket(JSONObject().put("id", id).put("event", "closing").put("code", code).put("reason", reason))
                     }
                     override fun onClosed(webSocket: okhttp3.WebSocket, code: Int, reason: String) {
+                        terminal.set(true)
                         webSockets.remove(id, webSocket)
                         deliverWebSocket(JSONObject().put("id", id).put("event", "closed").put("code", code).put("reason", reason))
                     }
                     override fun onFailure(webSocket: okhttp3.WebSocket, t: Throwable, response: Response?) {
+                        terminal.set(true)
                         webSockets.remove(id, webSocket)
                         val responseBody = try { response?.peekBody(4096L)?.string()?.take(2000) ?: "" } catch (_: Exception) { "" }
                         val causes = generateSequence(t as Throwable?) { it.cause }.take(5).joinToString(" <- ") { cause -> cause.javaClass.simpleName + (cause.message?.let { ": $it" } ?: "") }
@@ -688,7 +691,12 @@ class MainActivity : Activity() {
                             .put("url", parsed.toString()))
                     }
                 })
-                webSockets[id] = socket
+                // A very fast handshake failure can arrive before newWebSocket() returns.
+                // Track terminal callbacks so a dead socket is never reinserted afterward.
+                if (!terminal.get()) {
+                    webSockets[id] = socket
+                    if (terminal.get()) webSockets.remove(id, socket)
+                }
             } catch (e: Exception) {
                 val id = try { JSONObject(raw).optString("id") } catch (_: Exception) { "" }
                 deliverWebSocket(JSONObject().put("id", id).put("event", "failure").put("error", e.message ?: "WebSocket connection failed"))
