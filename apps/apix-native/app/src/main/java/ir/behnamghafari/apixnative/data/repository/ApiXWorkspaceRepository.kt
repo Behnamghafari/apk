@@ -78,6 +78,7 @@ class ApiXWorkspaceRepository(context: Context) {
     fun clearHistory() = database.clearHistory()
 
     private fun protectRequest(request: SavedRequest): SavedRequest = request.copy(
+        name = vault.protect(request.name),
         url = vault.protect(request.url),
         headersJson = vault.protect(request.headersJson),
         paramsJson = vault.protect(request.paramsJson),
@@ -91,6 +92,7 @@ class ApiXWorkspaceRepository(context: Context) {
             database.saveRequest(protectRequest(stored))
         }
         return stored.copy(
+            name = vault.reveal(stored.name),
             url = vault.reveal(stored.url),
             headersJson = vault.reveal(stored.headersJson),
             paramsJson = vault.reveal(stored.paramsJson),
