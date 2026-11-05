@@ -88,7 +88,15 @@ class ApiXDatabase(context: Context) :
         )
     }
 
-    fun getAllSavedRequests(): List<SavedRequest> = readableDatabase.query(\n        "saved_requests", null, null, null, null, null, "updated_at DESC"\n    ).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.toSavedRequest()) } }\n\n    fun getAllFolders(): List<RequestFolder> = readableDatabase.query(\n        "request_folders", null, null, null, null, null, "sort_order ASC, name COLLATE NOCASE ASC"\n    ).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.toFolder()) } }\n\n    fun getSavedRequests(folderId: String? = null): List<SavedRequest> {
+    fun getAllSavedRequests(): List<SavedRequest> = readableDatabase.query(
+        "saved_requests", null, null, null, null, null, "updated_at DESC"
+    ).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.toSavedRequest()) } }
+
+    fun getAllFolders(): List<RequestFolder> = readableDatabase.query(
+        "request_folders", null, null, null, null, null, "sort_order ASC, name COLLATE NOCASE ASC"
+    ).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.toFolder()) } }
+
+    fun getSavedRequests(folderId: String? = null): List<SavedRequest> {
         val selection = if (folderId == null) "folder_id IS NULL" else "folder_id = ?"
         val args = if (folderId == null) null else arrayOf(folderId)
         return readableDatabase.query(
