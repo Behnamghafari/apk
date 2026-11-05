@@ -35,6 +35,8 @@ jobs:
           keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E "SHA256:|SHA1:"
       - name: Build debug APK
         run: gradle -p apps/behnam-tester :app:assembleDebug
+      - name: Run Android Lint
+        run: gradle -p apps/behnam-tester :app:lintDebug
       - name: Verify APK signature
         run: |
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
