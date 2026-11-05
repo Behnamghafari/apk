@@ -14,6 +14,13 @@ import java.util.concurrent.TimeUnit
 
 data class HttpKeyValue(val key: String, val value: String, val enabled: Boolean = true)
 
+data class HttpMultipartFile(
+    val fieldName: String,
+    val fileName: String,
+    val contentType: String,
+    val bytes: ByteArray
+)
+
 data class HttpRequestSpec(
     val method: String,
     val url: String,
@@ -108,6 +115,24 @@ class HttpRequestEngine(
                     form.add(line.substring(0, split).trim(), line.substring(split + 1))
                 }
                 form.build()
+            }
+            "multipart" -> {
+                require(method !in setOf("GET", "HEAD")) { "ارسال multipart با GET یا HEAD امکان‌پذیر نیست." }
+                MultipartBody.Builder().setType(MultipartBody.FORM).apply {
+                    spec.body.lineSequence().filter { it.isNotBlank() }.forEach { line ->
+                        val split = line.indexOf('=')
+                        require(split > 0) { "فرمت فیلد multipart باید key=value در هر خط باشد." }
+                        addFormDataPart(line.substring(0, split).trim(), line.substring(split + 1))
+                    }
+                    spec.files.forEach { file ->
+                        require(file.fieldName.isNotBlank()) { "نام فیلد فایل خالی است." }
+                        addFormDataPart(
+                            file.fieldName,
+                            file.fileName,
+                            file.bytes.toRequestBody(file.contentType.toMediaTypeOrNull())
+                        )
+                    }
+                }.build()
             }
             else -> throw IllegalArgumentException("نوع بدنه درخواست شناخته‌شده نیست.")
         }
