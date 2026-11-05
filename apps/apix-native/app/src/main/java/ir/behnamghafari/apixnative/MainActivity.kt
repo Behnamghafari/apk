@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ir.behnamghafari.apixnative.data.model.ApiEnvironment
 import ir.behnamghafari.apixnative.data.model.SavedRequest
 import ir.behnamghafari.apixnative.data.network.HttpKeyValue
 import ir.behnamghafari.apixnative.data.network.HttpRequestEngine
@@ -106,6 +107,21 @@ private fun ApiXScreen(
     var folders by remember { mutableStateOf(repository.folders()) }
     var selectedFolderId by remember { mutableStateOf<String?>(null) }
     var folderName by remember { mutableStateOf("") }
+    var environments by remember { mutableStateOf(repository.environments()) }
+    var activeEnvironmentId by remember { mutableStateOf(environments.firstOrNull { it.isActive }?.id) }
+    var environmentName by remember { mutableStateOf(environments.firstOrNull { it.isActive }?.name ?: "Development") }
+    var environmentVariables by remember {
+        mutableStateOf(
+            environments.firstOrNull { it.isActive }?.variablesJson?.let { json ->
+                JSONArray(json).let { array ->
+                    (0 until array.length()).joinToString("\n") { i ->
+                        val item = array.getJSONObject(i)
+                        "${item.optString("key")}=${item.optString("value")}"
+                    }
+                }
+            } ?: ""
+        )
+    }
 
     fun keyValues(source: String, separator: Char): List<HttpKeyValue> =
         source.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.map { line ->
@@ -113,6 +129,26 @@ private fun ApiXScreen(
             require(index > 0) { "فرمت مقدار نامعتبر است: $line" }
             HttpKeyValue(line.substring(0, index).trim(), line.substring(index + 1).trim())
         }.toList()
+
+    fun activeVariables(): Map<String, String> {
+        val active = environments.firstOrNull { it.id == activeEnvironmentId } ?: return emptyMap()
+        val array = JSONArray(active.variablesJson)
+        return buildMap {
+            for (i in 0 until array.length()) {
+                val item = array.getJSONObject(i)
+                put(item.getString("key"), item.optString("value"))
+            }
+        }
+    }
+
+    fun resolveVariables(value: String, variables: Map<String, String>): String {
+        val pattern = Regex("\\{\\{\\s*([^{}]+?)\\s*}}")
+        return pattern.replace(value) { match ->
+            val key = match.groupValues[1].trim()
+            require(variables.containsKey(key)) { "متغیر محیطی تعریف نشده است: $key" }
+            variables.getValue(key)
+        }
+    }
 
     fun restoreRequest(saved: SavedRequest) {
         method = saved.method
@@ -149,6 +185,69 @@ private fun ApiXScreen(
     ) {
         Text("ApiX", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Native API Client · Kotlin + Compose + OkHttp", style = MaterialTheme.typography.bodySmall)
+
+        Text("محیط‌ها (Environments)", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = environmentName, onValueChange = { environmentName = it },
+            modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("نام محیط") }
+        )
+        OutlinedTextField(
+            value = environmentVariables, onValueChange = { environmentVariables = it },
+            modifier = Modifier.fillMaxWidth(), minLines = 3,
+            label = { Text("متغیرها · هر خط KEY=VALUE") }
+        )
+        OutlinedButton(
+            onClick = {
+                runCatching {
+                    val parsed = environmentVariables.lineSequence().map { it.trim() }
+                        .filter { it.isNotEmpty() }.map { line ->
+                            val split = line.indexOf('=')
+                            require(split > 0) { "فرمت متغیر نامعتبر است: $line" }
+                            val key = line.substring(0, split).trim()
+                            require(key.isNotBlank()) { "نام متغیر خالی است." }
+                            JSONObject().put("key", key).put("value", line.substring(split + 1))
+                        }.toList()
+                    require(parsed.map { it.getString("key") }.distinct().size == parsed.size) {
+                        "نام متغیرها باید یکتا باشد."
+                    }
+                    val now = System.currentTimeMillis()
+                    val existing = environments.firstOrNull { it.id == activeEnvironmentId }
+                    val environment = ApiEnvironment(
+                        id = existing?.id ?: ir.behnamghafari.apixnative.data.local.ApiXDatabase.newId(),
+                        name = environmentName.trim().ifBlank { "Environment" },
+                        variablesJson = JSONArray().apply { parsed.forEach { put(it) } }.toString(),
+                        isActive = true,
+                        createdAt = existing?.createdAt ?: now,
+                        updatedAt = now
+                    )
+                    repository.saveEnvironment(environment)
+                    environments = repository.environments()
+                    activeEnvironmentId = environment.id
+                    response = "محیط «${environment.name}» ذخیره و فعال شد."
+                }.onFailure { response = "خطا در ذخیره محیط: ${it.message}" }
+            },
+            enabled = environmentName.isNotBlank(), modifier = Modifier.fillMaxWidth()
+        ) { Text("ذخیره و فعال‌سازی محیط") }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            environments.forEach { env ->
+                OutlinedButton(onClick = {
+                    repository.activateEnvironment(env.id)
+                    environments = repository.environments()
+                    activeEnvironmentId = env.id
+                    environmentName = env.name
+                    environmentVariables = JSONArray(env.variablesJson).let { array ->
+                        (0 until array.length()).joinToString("\n") { i ->
+                            val item = array.getJSONObject(i)
+                            "${item.optString("key")}=${item.optString("value")}"
+                        }
+                    }
+                }) { Text(if (activeEnvironmentId == env.id) "✓ ${env.name}" else env.name) }
+            }
+        }
+        Text(
+            "متغیرها با قالب {{نام}} در URL، پارامترها، هدرها، بدنه و مقادیر احراز هویت جایگزین می‌شوند.",
+            style = MaterialTheme.typography.bodySmall
+        )
 
         Text("پوشه درخواست‌ها", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
@@ -261,19 +360,20 @@ private fun ApiXScreen(
                 loading = true
                 response = "در حال ارسال درخواست..."
                 val resultSpec = runCatching {
+                    val variables = activeVariables()
                     HttpRequestSpec(
                         method = method,
-                        url = url,
-                        queryParams = keyValues(params, '='),
-                        headers = keyValues(headers, ':'),
-                        body = body,
+                        url = resolveVariables(url, variables),
+                        queryParams = keyValues(resolveVariables(params, variables), '='),
+                        headers = keyValues(resolveVariables(headers, variables), ':'),
+                        body = resolveVariables(body, variables),
                         bodyType = bodyType,
                         authType = authType,
-                        authToken = authToken,
-                        authUsername = authUsername,
-                        authPassword = authPassword,
-                        apiKeyName = apiKeyName,
-                        apiKeyValue = apiKeyValue,
+                        authToken = resolveVariables(authToken, variables),
+                        authUsername = resolveVariables(authUsername, variables),
+                        authPassword = resolveVariables(authPassword, variables),
+                        apiKeyName = resolveVariables(apiKeyName, variables),
+                        apiKeyValue = resolveVariables(apiKeyValue, variables),
                         apiKeyIn = apiKeyIn
                     )
                 }
