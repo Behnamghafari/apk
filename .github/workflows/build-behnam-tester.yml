@@ -56,11 +56,23 @@ jobs:
           KEYSTORE_PATH="$RUNNER_TEMP/apix-production.jks"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
-          if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/keystore-validation-error.txt"; then
-            echo "::error::Production keystore validation failed. The Base64 file, keystore password, or alias may be incorrect."
-            sed -E 's/(password|storepass)[^[:cntrl:]]*/\\1 [REDACTED]/Ig' "$RUNNER_TEMP/keystore-validation-error.txt"
+          if [[ ! -s "$KEYSTORE_PATH" ]]; then
+            echo "::error::Decoded production keystore is empty. Recreate ANDROID_KEYSTORE_BASE64 from the release-key.jks file."
             exit 1
           fi
+          echo "Decoded keystore size: $(wc -c < "$KEYSTORE_PATH") bytes"
+          KEYTOOL_LOG="$RUNNER_TEMP/keystore-validation-error.txt"
+          if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" >"$KEYTOOL_LOG" 2>&1; then
+            echo "::error::Keystore could not be opened. Check ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD."
+            cat "$KEYTOOL_LOG"
+            exit 1
+          fi
+          if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >"$KEYTOOL_LOG" 2>&1; then
+            echo "::error::Keystore opens successfully, but ANDROID_KEY_ALIAS was not found. Set it to apix."
+            cat "$KEYTOOL_LOG"
+            exit 1
+          fi
+          echo "Production keystore and alias validated successfully."
           echo "ANDROID_KEYSTORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
           echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
