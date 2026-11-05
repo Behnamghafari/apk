@@ -79,7 +79,52 @@ class MainActivity : Activity() {
         web.loadUrl("file:///android_asset/tester.html")
     }
 
+    private val storageDb by lazy {
+        openOrCreateDatabase("apix_storage.db", MODE_PRIVATE, null).apply {
+            execSQL("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)")
+        }
+    }
+
     inner class Bridge {
+        @JavascriptInterface fun getStorageSnapshot(): String {
+            val rows = JSONArray()
+            storageDb.rawQuery("SELECT key, value FROM kv", null).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val parsed = org.json.JSONTokener(cursor.getString(1)).nextValue()
+                    rows.put(JSONObject().put("key", cursor.getString(0)).put("value", parsed))
+                }
+            }
+            return rows.toString()
+        }
+
+        @JavascriptInterface fun setStorageValue(key: String, value: String) {
+            if (!key.startsWith("bt_") || key.length > 160 || value.length > 8 * 1024 * 1024) return
+            val values = android.content.ContentValues().apply { put("key", key); put("value", value) }
+            storageDb.insertWithOnConflict("kv", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE)
+        }
+
+        @JavascriptInterface fun importStorageRecords(raw: String): Int {
+            val records = JSONArray(raw)
+            var imported = 0
+            val db = storageDb
+            db.beginTransaction()
+            try {
+                for (i in 0 until records.length()) {
+                    val record = records.optJSONObject(i) ?: continue
+                    val key = record.optString("key")
+                    if (!key.startsWith("bt_") || key.length > 160) continue
+                    val values = android.content.ContentValues().apply {
+                        put("key", key)
+                        put("value", JSONObject().put("value", record.opt("value")).toString().let { JSONObject(it).getString("value") })
+                    }
+                    if (db.insertWithOnConflict("kv", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE) != -1L) imported++
+                }
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+            return imported
+        }
+
+
 
         @JavascriptInterface fun runMonitorCheck(raw: String) {
             Thread {
