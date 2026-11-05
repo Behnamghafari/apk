@@ -591,6 +591,24 @@ private fun ApiXScreen(
                 response = "در حال ارسال درخواست..."
                 val resultSpec = runCatching {
                     val variables = activeVariables()
+                    val multipartPayload = if (bodyType == "multipart") {
+                        require(multipartFiles.size <= 10) { "حداکثر ۱۰ فایل را می‌توانید هم‌زمان ارسال کنید." }
+                        multipartFiles.map { uri ->
+                            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                                ?: error("فایل ${fileDisplayName(uri)} قابل خواندن نیست.")
+                            require(bytes.size <= 20 * 1024 * 1024) { "حجم هر فایل نباید بیشتر از ۲۰ مگابایت باشد." }
+                            HttpMultipartFile(
+                                fieldName = multipartFieldName,
+                                fileName = fileDisplayName(uri),
+                                contentType = context.contentResolver.getType(uri) ?: "application/octet-stream",
+                                bytes = bytes
+                            )
+                        }.also { files ->
+                            require(files.sumOf { it.bytes.size.toLong() } <= 50L * 1024 * 1024) {
+                                "حجم کل فایل‌ها نباید بیشتر از ۵۰ مگابایت باشد."
+                            }
+                        }
+                    } else emptyList()
                     HttpRequestSpec(
                         method = if (requestMode == "graphql") "POST" else method,
                         url = resolveVariables(url, variables),
@@ -605,17 +623,7 @@ private fun ApiXScreen(
                         apiKeyName = resolveVariables(apiKeyName, variables),
                         apiKeyValue = resolveVariables(apiKeyValue, variables),
                         apiKeyIn = apiKeyIn,
-                        files = if (bodyType == "multipart") multipartFiles.map { uri ->
-                            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                                ?: error("فایل ${fileDisplayName(uri)} قابل خواندن نیست.")
-                            require(bytes.size <= 20 * 1024 * 1024) { "حجم هر فایل نباید بیشتر از ۲۰ مگابایت باشد." }
-                            HttpMultipartFile(
-                                fieldName = multipartFieldName,
-                                fileName = fileDisplayName(uri),
-                                contentType = context.contentResolver.getType(uri) ?: "application/octet-stream",
-                                bytes = bytes
-                            )
-                        } else emptyList()
+                        files = multipartPayload
                     )
                 }
                 resultSpec.onSuccess { spec ->
