@@ -1005,7 +1005,8 @@ function seedSamples(){
  add('samples_mobile_prices','جست‌وجوی iPhone · قیمت آزمایشی','GET','https://dummyjson.com/products/search?q=iphone',{description:'برای تست جست‌وجو و فیلد price؛ قیمت واقعی فروشگاه نیست.'});
  add('samples_mobile_prices','جزئیات محصول نمونه شماره ۱','GET','https://dummyjson.com/products/1',{description:'رکورد آزمایشی محصول برای تمرین نمایش مشخصات و قیمت.'});
  add('samples_mobile_prices','صفحه دوم فهرست گوشی‌ها','GET','https://dummyjson.com/products/category/smartphones?limit=10&skip=10',{description:'تمرین صفحه‌بندی فهرست گوشی‌های نمونه.'});
-\n add('samples_security','هدرهای امنیتی پاسخ','GET',hb+'/response-headers?X-Content-Type-Options=nosniff&X-Frame-Options=DENY&Referrer-Policy=no-referrer');
+
+ add('samples_security','هدرهای امنیتی پاسخ','GET',hb+'/response-headers?X-Content-Type-Options=nosniff&X-Frame-Options=DENY&Referrer-Policy=no-referrer');
  add('samples_security','CORS Response Headers','GET',hb+'/response-headers?Access-Control-Allow-Origin=https%3A%2F%2Fexample.com&Access-Control-Allow-Methods=GET%2CPOST');
  add('samples_security','Origin سفارشی','GET',hb+'/get',{headers:[{key:'Origin',value:'https://example.com',enabled:true}]});
  j('samples_security','رشته‌های امنیتی به‌عنوان داده','POST',hb+'/post',{input:"<script>alert('xss')<\/script>",quote:"' OR '1'='1",note:'فقط داده آزمایشی؛ اجرا نمی‌شود'});
