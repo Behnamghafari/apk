@@ -1,6 +1,7 @@
 package ir.behnamghafari.apixnative.data.network
 
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -66,7 +67,7 @@ class HttpRequestEngine(
             "آدرس باید با http:// یا https:// شروع شود."
         }
 
-        val urlBuilder = requireNotNull(okhttp3.HttpUrl.Companion.toHttpUrlOrNull(parsedUrl)) {
+        val urlBuilder = requireNotNull(parsedUrl.toHttpUrlOrNull()) {
             "آدرس URL معتبر نیست."
         }.newBuilder()
         spec.queryParams.filter { it.enabled && it.key.isNotBlank() }
@@ -88,10 +89,9 @@ class HttpRequestEngine(
             }
         }
 
-        val requestUrl = if (spec.authType.equals("apikey", true) && spec.apiKeyIn == "query") {
+        if (spec.authType.equals("apikey", true) && spec.apiKeyIn == "query") {
             builder.url(urlBuilder.build())
-            urlBuilder.build()
-        } else urlBuilder.build()
+        }
 
         val requestBody = when (spec.bodyType.lowercase()) {
             "none" -> null
