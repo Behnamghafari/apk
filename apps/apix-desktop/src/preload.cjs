@@ -37,23 +37,4 @@ const api={
   runLoadTest:(...a)=>invoke('runLoadTest',...a)
 };
 contextBridge.exposeInMainWorld('BehnamNative',api);
-window.addEventListener('DOMContentLoaded',()=>{
-  window.BehnamTester=window.BehnamTester||{};
-  ipcRenderer.on('apix:event',(_event,{name,payload})=>{
-    try {
-      if(name==='onResult') window.BehnamTester.onResult?.(payload);
-      else if(name==='onWebSocketEvent') window.BehnamTester.onWebSocketEvent?.(payload);
-      else if(name==='onOpenApiFileSelected') window.onOpenApiFileSelected?.(payload[0],payload[1]);
-      else if(name==='onJsonFileSelected') window.onJsonFileSelected?.(payload[0],payload[1]);
-      else if(name==='onBackupFileSelected') window.onBackupFileSelected?.(payload);
-      else if(name==='onBackupSaved') window.onBackupSaved?.(payload);
-      else if(name==='onSqliteBackupSelected') window.onSqliteBackupSelected?.(payload);
-      else if(name==='onUploadFilesSelected') window.BehnamTester.onUploadFilesSelected?.(payload);
-      else if(name==='onUploadResult') window.BehnamTester.onUploadResult?.(payload);
-      else if(name==='onSecurityAuditResult') window.BehnamTester.onSecurityAuditResult?.(payload);
-      else if(name==='onMonitorResult') window.BehnamTester.onMonitorResult?.(payload);
-      else if(name==='onLoadTestResult') window.BehnamTester.onLoadTestResult?.(payload);
-      else if(name==='toast') console.info('[ApiX]',payload);
-    } catch(e) { console.error('ApiX callback failed',name,e); }
-  });
-});
+
