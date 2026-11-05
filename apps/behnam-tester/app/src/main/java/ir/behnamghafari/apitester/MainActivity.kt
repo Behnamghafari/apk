@@ -125,18 +125,29 @@ class MainActivity : Activity() {
                     val key = record.optString("key")
                     if (!key.startsWith("bt_") || key.length > 160) continue
                     val encoded = JSONObject().put("v", record.opt("value")).getString("v")
-                    val values = android.content.ContentValues().apply { put("key", key); put("value", encoded) }
                     val isImportantList = key == "bt_folders" || key == "bt_collections"
-                    val shouldRepairEmptyList = if (isImportantList) {
+                    var mergedLegacyValue: String? = null
+                    if (isImportantList) {
                         db.rawQuery("SELECT value FROM kv WHERE key=?", arrayOf(key)).use { cursor ->
-                            if (!cursor.moveToFirst()) true else {
-                                val existing = try { JSONArray(cursor.getString(0)) } catch (_: Exception) { JSONArray() }
-                                val incoming = try { JSONArray(encoded) } catch (_: Exception) { JSONArray() }
-                                existing.length() == 0 && incoming.length() > 0
+                            val existing = if (cursor.moveToFirst()) try { JSONArray(cursor.getString(0)) } catch (_: Exception) { JSONArray() } else JSONArray()
+                            val incoming = try { JSONArray(encoded) } catch (_: Exception) { JSONArray() }
+                            if (incoming.length() > 0) {
+                                val merged = JSONArray()
+                                val seen = HashSet<String>()
+                                for (source in listOf(existing, incoming)) {
+                                    for (index in 0 until source.length()) {
+                                        val item = source.opt(index) ?: continue
+                                        val id = item.optJSONObject()?.optString("id")?.takeIf { it.isNotBlank() } ?: item.toString()
+                                        if (seen.add(id)) merged.put(item)
+                                    }
+                                }
+                                if (merged.length() > existing.length()) mergedLegacyValue = merged.toString()
                             }
                         }
-                    } else false
-                    val conflict = if (shouldRepairEmptyList) android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE else android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE
+                    }
+                    val finalValue = mergedLegacyValue ?: encoded
+                    val values = android.content.ContentValues().apply { put("key", key); put("value", finalValue) }
+                    val conflict = if (mergedLegacyValue != null) android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE else android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE
                     if (db.insertWithOnConflict("kv", null, values, conflict) != -1L) imported++
                 }
                 db.setTransactionSuccessful()
