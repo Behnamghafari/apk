@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(resolve(root, 'app/src/main/assets/tester.html'), 'utf8');
-const kotlin = readFileSync(resolve(root, 'app/src/main/java/com/behnamghafari/tester/MainActivity.kt'), 'utf8');
+const kotlin = readFileSync(resolve(root, 'app/src/main/java/ir/behnamghafari/apitester/MainActivity.kt'), 'utf8');
 const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]);
 
 function assert(condition, message) {
