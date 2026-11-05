@@ -34,7 +34,8 @@ data class HttpRequestSpec(
     val authToken: String = "",
     val apiKeyName: String = "",
     val apiKeyValue: String = "",
-    val apiKeyIn: String = "header"
+    val apiKeyIn: String = "header",
+    val files: List<HttpMultipartFile> = emptyList()
 )
 
 data class HttpResponseSnapshot(
