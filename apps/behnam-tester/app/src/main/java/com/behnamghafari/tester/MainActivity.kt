@@ -115,7 +115,7 @@ class MainActivity : Activity() {
                     if (!key.startsWith("bt_") || key.length > 160) continue
                     val values = android.content.ContentValues().apply {
                         put("key", key)
-                        put("value", JSONObject.valueToString(record.opt("value")))
+                        put("value", JSONArray().put(record.opt("value")).toString().let { it.substring(1, it.length - 1) })
                     }
                     if (db.insertWithOnConflict("kv", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE) != -1L) imported++
                 }
