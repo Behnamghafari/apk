@@ -121,6 +121,7 @@ private fun ApiXScreen(
     var savedRequests by remember { mutableStateOf(repository.savedRequests()) }
     var history by remember { mutableStateOf(repository.history(8)) }
     var folders by remember { mutableStateOf(repository.folders()) }
+    var allFolders by remember { mutableStateOf(repository.allFolders()) }
     var selectedFolderId by remember { mutableStateOf<String?>(null) }
     var folderName by remember { mutableStateOf("") }
     var environments by remember { mutableStateOf(repository.environments()) }
@@ -144,7 +145,8 @@ private fun ApiXScreen(
                     }
                     repository.saveRequest(imported.request.copy(folderId = parentId))
                 }
-                folders = repository.folders()
+                allFolders = repository.allFolders()
+                folders = repository.folders(selectedFolderId)
                 savedRequests = repository.savedRequests(selectedFolderId)
                 response = "Collection «${collection.name}» وارد شد؛ ${collection.requests.size} درخواست اضافه شد."
             }.onFailure { response = "خطای Import: ${it.message}" }
@@ -370,33 +372,81 @@ private fun ApiXScreen(
             style = MaterialTheme.typography.bodySmall
         )
 
-        Text("پوشه درخواست‌ها", style = MaterialTheme.typography.titleMedium)
+        Text("پوشه‌های درخواست", style = MaterialTheme.typography.titleMedium)
+        Text(
+            if (selectedFolderId == null) "مسیر فعلی: ریشه" else {
+                val current = allFolders.firstOrNull { it.id == selectedFolderId }
+                "مسیر فعلی: ${current?.name ?: "پوشه"}"
+            },
+            style = MaterialTheme.typography.bodySmall
+        )
         OutlinedTextField(
             value = folderName, onValueChange = { folderName = it },
-            modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("نام پوشه جدید") }
+            modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("نام پوشه / نام جدید") }
         )
-        OutlinedButton(
-            onClick = {
-                runCatching {
-                    repository.createFolder(folderName)
-                    folderName = ""
-                    folders = repository.folders()
-                    response = "پوشه ساخته شد."
-                }.onFailure { response = "خطا در ساخت پوشه: ${it.message}" }
-            },
-            enabled = folderName.isNotBlank(), modifier = Modifier.fillMaxWidth()
-        ) { Text("+ ساخت پوشه") }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = {
+                    runCatching {
+                        repository.createFolder(folderName, selectedFolderId)
+                        folderName = ""
+                        allFolders = repository.allFolders()
+                        folders = repository.folders(selectedFolderId)
+                        response = "زیرپوشه ساخته شد."
+                    }.onFailure { response = "خطا در ساخت پوشه: ${it.message}" }
+                },
+                enabled = folderName.isNotBlank(), modifier = Modifier.weight(1f)
+            ) { Text("+ زیرپوشه") }
+            if (selectedFolderId != null) {
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            repository.renameFolder(selectedFolderId!!, folderName)
+                            folderName = ""
+                            allFolders = repository.allFolders()
+                            folders = repository.folders(selectedFolderId)
+                            response = "نام پوشه تغییر کرد."
+                        }.onFailure { response = "خطا در تغییر نام: ${it.message}" }
+                    },
+                    enabled = folderName.isNotBlank(), modifier = Modifier.weight(1f)
+                ) { Text("تغییر نام") }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = {
+                val parentId = allFolders.firstOrNull { it.id == selectedFolderId }?.parentId
+                selectedFolderId = parentId
+                folders = repository.folders(parentId)
+                savedRequests = repository.savedRequests(parentId)
+            }, enabled = selectedFolderId != null) { Text("بازگشت") }
             OutlinedButton(onClick = {
                 selectedFolderId = null
+                folders = repository.folders()
                 savedRequests = repository.savedRequests()
-            }) { Text(if (selectedFolderId == null) "✓ بدون پوشه" else "بدون پوشه") }
-            folders.forEach { folder ->
+            }) { Text("ریشه") }
+            if (selectedFolderId != null) {
                 OutlinedButton(onClick = {
-                    selectedFolderId = folder.id
-                    savedRequests = repository.savedRequests(folder.id)
-                }) { Text(if (selectedFolderId == folder.id) "✓ ${folder.name}" else folder.name) }
+                    runCatching {
+                        val parentId = allFolders.firstOrNull { it.id == selectedFolderId }?.parentId
+                        repository.deleteFolder(selectedFolderId!!)
+                        selectedFolderId = parentId
+                        allFolders = repository.allFolders()
+                        folders = repository.folders(parentId)
+                        savedRequests = repository.savedRequests(parentId)
+                        response = "پوشه حذف شد."
+                    }.onFailure { response = "خطا در حذف پوشه: ${it.message}" }
+                }) { Text("حذف پوشه") }
             }
+        }
+        folders.forEach { folder ->
+            OutlinedButton(
+                onClick = {
+                    selectedFolderId = folder.id
+                    folders = repository.folders(folder.id)
+                    savedRequests = repository.savedRequests(folder.id)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("📁 ${folder.name}  ›") }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -596,16 +646,39 @@ private fun ApiXScreen(
 
         Text("درخواست‌های ذخیره‌شده (${savedRequests.size})", style = MaterialTheme.typography.titleMedium)
         savedRequests.forEach { saved ->
+            var moveMenuOpen by remember(saved.id) { mutableStateOf(false) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(saved.name, fontWeight = FontWeight.SemiBold)
                     Text("${saved.method} · ${saved.url}", style = MaterialTheme.typography.bodySmall)
                 }
                 OutlinedButton(onClick = { restoreRequest(saved) }) { Text("بازکردن") }
+                Box {
+                    OutlinedButton(onClick = { moveMenuOpen = true }) { Text("انتقال") }
+                    DropdownMenu(expanded = moveMenuOpen, onDismissRequest = { moveMenuOpen = false }) {
+                        DropdownMenuItem(text = { Text("بدون پوشه") }, onClick = {
+                            repository.saveRequest(saved.copy(folderId = null, updatedAt = System.currentTimeMillis()))
+                            moveMenuOpen = false
+                            savedRequests = repository.savedRequests(selectedFolderId)
+                        })
+                        allFolders.forEach { target ->
+                            DropdownMenuItem(text = { Text(target.name) }, onClick = {
+                                repository.saveRequest(saved.copy(folderId = target.id, updatedAt = System.currentTimeMillis()))
+                                moveMenuOpen = false
+                                savedRequests = repository.savedRequests(selectedFolderId)
+                            })
+                        }
+                    }
+                }
+                OutlinedButton(onClick = {
+                    repository.deleteRequest(saved.id)
+                    savedRequests = repository.savedRequests(selectedFolderId)
+                    response = "درخواست حذف شد."
+                }) { Text("حذف") }
             }
         }
 
