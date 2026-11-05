@@ -836,7 +836,7 @@ class MainActivity : Activity() {
                     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE)
                         type = "*/*"
-                        putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/vnd.sqlite3", "application/x-sqlite3", "application/octet-stream"))
+                        putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/vnd.sqlite3", "application/x-sqlite3", "application/octet-stream", "application/json", "text/json"))
                     }
                     startActivityForResult(intent, sqliteBackupRestoreRequestCode)
                 } catch (e: Exception) {
@@ -1100,7 +1100,16 @@ class MainActivity : Activity() {
                     val file = java.io.File(cacheDir, "apix-restore-${System.currentTimeMillis()}.db")
                     contentResolver.openInputStream(data.data!!)?.use { input -> file.outputStream().use { output -> input.copyTo(output) } }
                         ?: throw IllegalStateException("Cannot read SQLite backup file")
-                    require(file.length() in 1..(128L * 1024L * 1024L)) { "SQLite backup file size is invalid or exceeds 128 MB" }
+                    require(file.length() in 1..(128L * 1024L * 1024L)) { "Backup file size is invalid or exceeds 128 MB" }
+                    val prefix = file.inputStream().use { input -> ByteArray(64).also { input.read(it) } }
+                    val prefixText = String(prefix, Charsets.UTF_8).trimStart()
+                    if (prefixText.startsWith("{")) {
+                        require(file.length() <= 32L * 1024L * 1024L) { "Legacy JSON backup exceeds 32 MB" }
+                        val legacyJson = file.readText(Charsets.UTF_8)
+                        file.delete()
+                        if (::web.isInitialized) web.evaluateJavascript("window.onBackupFileSelected && window.onBackupFileSelected(" + JSONObject.quote(legacyJson) + ")", null)
+                        return
+                    }
                     val source = android.database.sqlite.SQLiteDatabase.openDatabase(file.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
                     var count = 0
                     var folders = 0
