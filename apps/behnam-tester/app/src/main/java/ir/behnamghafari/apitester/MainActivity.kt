@@ -387,7 +387,7 @@ class MainActivity : Activity() {
                         }
                         val baseline = probe(probeValue)
                         val singleQuote = probe(probeValue + "'")
-                        val doubleQuote = probe(probeValue + "\\\"")
+                        val doubleQuote = probe(probeValue + "\"")
                         val sqlErrors = listOf("sql syntax", "sqlite_exception", "sqlstate", "unterminated quoted", "mysql_fetch", "postgresql", "odbc", "ora-")
                         val quoteError = (singleQuote.second + " " + doubleQuote.second).lowercase()
                         val sqlSignal = sqlErrors.any { quoteError.contains(it) } || (singleQuote.first in 500..599 && baseline.first !in 500..599)
