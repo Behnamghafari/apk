@@ -61,7 +61,7 @@ class ApiXWorkspaceRepository(context: Context) {
         RequestHistoryEntry(
             id = ApiXDatabase.newId(),
             method = method,
-            url = url,
+            url = vault.protect(url),
             statusCode = statusCode,
             durationMs = durationMs,
             responseSize = responseSize,
@@ -69,7 +69,12 @@ class ApiXWorkspaceRepository(context: Context) {
         )
     )
 
-    fun history(limit: Int = 200) = database.getHistory(limit)
+    fun history(limit: Int = 200) = database.getHistory(limit).map { stored ->
+        if (stored.url.isNotBlank() && !vault.isEncrypted(stored.url)) {
+            database.updateHistoryUrl(stored.id, vault.protect(stored.url))
+        }
+        stored.copy(url = vault.reveal(stored.url))
+    }
     fun clearHistory() = database.clearHistory()
 
     private fun protectRequest(request: SavedRequest): SavedRequest = request.copy(
