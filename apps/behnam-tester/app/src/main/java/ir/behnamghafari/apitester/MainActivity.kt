@@ -672,9 +672,17 @@ class MainActivity : Activity() {
                 val id = data.optString("id").take(80)
                 require(id.isNotBlank()) { "Connection id is required" }
                 val url = data.getString("url").trim()
-                val parsed = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid WebSocket URL")
-                require(parsed.scheme == "ws" || parsed.scheme == "wss") { "Only ws:// and wss:// are supported" }
-                val requestBuilder = Request.Builder().url(url)
+                // OkHttp HttpUrl accepts only HTTP(S) schemes. Convert the WebSocket
+                // URL for the handshake request; newWebSocket() performs the upgrade.
+                val httpUrlText = when {
+                    url.startsWith("wss://", ignoreCase = true) -> url.replaceFirst(Regex("^wss://", RegexOption.IGNORE_CASE), "https://")
+                    url.startsWith("ws://", ignoreCase = true) -> url.replaceFirst(Regex("^ws://", RegexOption.IGNORE_CASE), "http://")
+                    else -> throw IllegalArgumentException("Only ws:// and wss:// are supported")
+                }
+                val httpUrl = httpUrlText.toHttpUrlOrNull()
+                    ?: throw IllegalArgumentException("Invalid WebSocket URL")
+                require(!httpUrl.host.isBlank()) { "WebSocket host is required" }
+                val requestBuilder = Request.Builder().url(httpUrl)
                 val headers = data.optJSONArray("headers") ?: JSONArray()
                 require(headers.length() <= 40) { "Maximum 40 headers allowed" }
                 val blocked = setOf("host", "connection", "upgrade", "content-length", "transfer-encoding")
@@ -700,7 +708,7 @@ class MainActivity : Activity() {
                     .retryOnConnectionFailure(true)
                     .build()
                 val terminal = AtomicBoolean(false)
-                deliverWebSocket(JSONObject().put("id", id).put("event", "connecting").put("url", parsed.toString()))
+                deliverWebSocket(JSONObject().put("id", id).put("event", "connecting").put("url", url))
                 val socket = wsClient.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
                     override fun onOpen(webSocket: okhttp3.WebSocket, response: Response) {
                         deliverWebSocket(JSONObject().put("id", id).put("event", "open")
@@ -739,7 +747,7 @@ class MainActivity : Activity() {
                             .put("httpMessage", response?.message ?: "")
                             .put("responseBody", responseBody)
                             .put("responseHeaders", response?.headers?.toMultimap()?.mapValues { it.value.joinToString(", ") }?.let { JSONObject(it) } ?: JSONObject())
-                            .put("url", parsed.toString()))
+                            .put("url", url))
                     }
                 })
                 // A very fast handshake failure can arrive before newWebSocket() returns.
