@@ -25,5 +25,7 @@ The Windows build workflow also publishes an NSIS installer and a portable execu
 ## Data
 Application data is stored in the current Windows user's Electron application data directory in `apix.sqlite`. API requests are made directly from the desktop main process to the URL selected in ApiX. No ApiX relay server is used.
 
-## Current desktop port status
-The shared ApiX interface and initial Electron bridge are in place. Some Android-specific file/SQLite restore and multipart upload flows still require desktop-specific implementation and validation before this build should be considered feature-complete.
+## Desktop implementation
+The desktop port reuses the ApiX interface and provides an Electron/Node bridge for REST requests, GraphQL, WebSocket connections with ping keepalive, SQLite-backed local storage, JSON and SQLite backup/restore, OpenAPI file selection, multipart uploads, a local Mock Server, monitoring, load testing and the same non-destructive security assessment flow.
+
+This is the first Windows desktop release candidate. Validate your own API environments and backup files before relying on it as the only copy of important data.
