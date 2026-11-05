@@ -103,6 +103,9 @@ private fun ApiXScreen(
     var loading by remember { mutableStateOf(false) }
     var savedRequests by remember { mutableStateOf(repository.savedRequests()) }
     var history by remember { mutableStateOf(repository.history(8)) }
+    var folders by remember { mutableStateOf(repository.folders()) }
+    var selectedFolderId by remember { mutableStateOf<String?>(null) }
+    var folderName by remember { mutableStateOf("") }
 
     fun keyValues(source: String, separator: Char): List<HttpKeyValue> =
         source.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.map { line ->
@@ -146,6 +149,35 @@ private fun ApiXScreen(
     ) {
         Text("ApiX", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Native API Client · Kotlin + Compose + OkHttp", style = MaterialTheme.typography.bodySmall)
+
+        Text("پوشه درخواست‌ها", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = folderName, onValueChange = { folderName = it },
+            modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("نام پوشه جدید") }
+        )
+        OutlinedButton(
+            onClick = {
+                runCatching {
+                    repository.createFolder(folderName)
+                    folderName = ""
+                    folders = repository.folders()
+                    response = "پوشه ساخته شد."
+                }.onFailure { response = "خطا در ساخت پوشه: ${it.message}" }
+            },
+            enabled = folderName.isNotBlank(), modifier = Modifier.fillMaxWidth()
+        ) { Text("+ ساخت پوشه") }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = {
+                selectedFolderId = null
+                savedRequests = repository.savedRequests()
+            }) { Text(if (selectedFolderId == null) "✓ بدون پوشه" else "بدون پوشه") }
+            folders.forEach { folder ->
+                OutlinedButton(onClick = {
+                    selectedFolderId = folder.id
+                    savedRequests = repository.savedRequests(folder.id)
+                }) { Text(if (selectedFolderId == folder.id) "✓ ${folder.name}" else folder.name) }
+            }
+        }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box {
@@ -297,10 +329,11 @@ private fun ApiXScreen(
                             name = requestName.ifBlank { "$method $url" },
                             method = method, url = url, headersJson = headersJson, paramsJson = paramsJson,
                             body = body, bodyType = bodyType, authType = authType,
-                            authConfigJson = authJson.toString(), createdAt = now, updatedAt = now
+                            authConfigJson = authJson.toString(), folderId = selectedFolderId,
+                            createdAt = now, updatedAt = now
                         )
                     )
-                    savedRequests = repository.savedRequests()
+                    savedRequests = repository.savedRequests(selectedFolderId)
                     response = "درخواست ذخیره شد."
                 }.onFailure { response = "خطا در ذخیره: ${it.message}" }
             },
