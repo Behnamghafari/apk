@@ -25,6 +25,7 @@ import java.net.InetAddress
 import java.net.Socket
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.util.concurrent.ConcurrentHashMap
 
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -34,6 +35,7 @@ class MainActivity : Activity() {
     private lateinit var client: OkHttpClient
     @Volatile private var mockServer: ServerSocket? = null
     @Volatile private var mockRoutes = JSONArray()
+    private val webSockets = ConcurrentHashMap<String, okhttp3.WebSocket>()
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -381,6 +383,82 @@ class MainActivity : Activity() {
                 )
             }
         }
+
+        @JavascriptInterface fun wsConnect(raw: String) {
+            try {
+                val data = JSONObject(raw)
+                val id = data.optString("id").take(80)
+                require(id.isNotBlank()) { "Connection id is required" }
+                val url = data.getString("url").trim()
+                val parsed = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid WebSocket URL")
+                require(parsed.scheme == "ws" || parsed.scheme == "wss") { "Only ws:// and wss:// are supported" }
+                val requestBuilder = Request.Builder().url(url)
+                val headers = data.optJSONArray("headers") ?: JSONArray()
+                require(headers.length() <= 40) { "Maximum 40 headers allowed" }
+                val blocked = setOf("host", "connection", "upgrade", "content-length", "transfer-encoding")
+                for (i in 0 until headers.length()) {
+                    val item = headers.optJSONObject(i) ?: continue
+                    val name = item.optString("key").trim()
+                    val value = item.optString("value")
+                    if (name.isBlank()) continue
+                    require(name.length <= 200 && value.length <= 8192) { "Header is too long" }
+                    require(name.lowercase() !in blocked && !name.startsWith("sec-websocket-", true)) { "Header is managed by WebSocket protocol: $name" }
+                    requestBuilder.addHeader(name, value)
+                }
+                val pingSeconds = data.optInt("pingInterval", 25).coerceIn(0, 120)
+                webSockets.remove(id)?.close(1000, "Replaced")
+                val wsClient = client.newBuilder().pingInterval(pingSeconds.toLong(), TimeUnit.SECONDS).readTimeout(0, TimeUnit.MILLISECONDS).build()
+                val socket = wsClient.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
+                    override fun onOpen(webSocket: okhttp3.WebSocket, response: Response) {
+                        webSockets[id] = webSocket
+                        deliverWebSocket(JSONObject().put("id", id).put("event", "open").put("protocol", response.header("Sec-WebSocket-Protocol", "")))
+                    }
+                    override fun onMessage(webSocket: okhttp3.WebSocket, text: String) {
+                        deliverWebSocket(JSONObject().put("id", id).put("event", "message").put("message", text))
+                    }
+                    override fun onMessage(webSocket: okhttp3.WebSocket, bytes: okio.ByteString) {
+                        deliverWebSocket(JSONObject().put("id", id).put("event", "message").put("message", "[Binary message · ${bytes.size} bytes]").put("binary", true))
+                    }
+                    override fun onPong(webSocket: okhttp3.WebSocket, payload: okio.ByteString) {
+                        deliverWebSocket(JSONObject().put("id", id).put("event", "pong").put("bytes", payload.size))
+                    }
+                    override fun onClosing(webSocket: okhttp3.WebSocket, code: Int, reason: String) {
+                        deliverWebSocket(JSONObject().put("id", id).put("event", "closing").put("code", code).put("reason", reason))
+                    }
+                    override fun onClosed(webSocket: okhttp3.WebSocket, code: Int, reason: String) {
+                        webSockets.remove(id, webSocket)
+                        deliverWebSocket(JSONObject().put("id", id).put("event", "closed").put("code", code).put("reason", reason))
+                    }
+                    override fun onFailure(webSocket: okhttp3.WebSocket, t: Throwable, response: Response?) {
+                        webSockets.remove(id, webSocket)
+                        deliverWebSocket(JSONObject().put("id", id).put("event", "failure").put("error", t.message ?: t.javaClass.simpleName).put("httpCode", response?.code ?: 0))
+                    }
+                })
+                webSockets[id] = socket
+            } catch (e: Exception) {
+                val id = try { JSONObject(raw).optString("id") } catch (_: Exception) { "" }
+                deliverWebSocket(JSONObject().put("id", id).put("event", "failure").put("error", e.message ?: "WebSocket connection failed"))
+            }
+        }
+
+        @JavascriptInterface fun wsSend(id: String, message: String): Boolean {
+            if (message.length > 1024 * 1024) return false
+            return webSockets[id]?.send(message) == true
+        }
+
+        @JavascriptInterface fun wsClose(id: String, code: Int, reason: String) {
+            val safeCode = if (code in 1000..4999 && code !in listOf(1004, 1005, 1006, 1015)) code else 1000
+            webSockets.remove(id)?.close(safeCode, reason.take(120))
+        }
+
+        private fun deliverWebSocket(event: JSONObject) {
+            runOnUiThread {
+                if (::web.isInitialized) web.evaluateJavascript(
+                    "window.BehnamTester && window.BehnamTester.onWebSocketEvent(" + JSONObject.quote(event.toString()) + ")", null
+                )
+            }
+        }
+
         @JavascriptInterface fun chooseUploadFiles() {
             runOnUiThread {
                 try {
@@ -553,6 +631,8 @@ class MainActivity : Activity() {
     }
     override fun onDestroy() {
         try { mockServer?.close() } catch (_: Exception) { }
+        webSockets.values.forEach { try { it.close(1001, "App destroyed") } catch (_: Exception) { } }
+        webSockets.clear()
         if (::web.isInitialized) web.destroy()
         super.onDestroy()
     }
