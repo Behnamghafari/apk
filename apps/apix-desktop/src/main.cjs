@@ -230,11 +230,20 @@ async function monitorCheck(raw) {
   try { const d=JSON.parse(raw); const t=performance.now(); const r=await fetch(d.url,{method:d.method||'GET'}); return {ok:r.ok,status:r.status,duration:Math.round(performance.now()-t),url:d.url}; } catch(e) { return {ok:false,error:e.message}; }
 }
 async function loadTest(raw) {
-  const d=JSON.parse(raw), total=Math.min(500,Math.max(1,Number(d.requests)||1)), concurrency=Math.min(20,Math.max(1,Number(d.concurrency)||1));
-  let next=0,done=0,failed=0; const times=[];
-  async function worker(){while(next<total){const i=next++;const t=performance.now();try{const r=await fetch(d.url,{method:d.method||'GET'});if(!r.ok)failed++;await r.arrayBuffer();}catch{failed++;}times.push(performance.now()-t);done++;}}
-  await Promise.all(Array.from({length:concurrency},worker));
-  times.sort((a,b)=>a-b); return {ok:failed===0,total,completed:done,failed,min:times[0]||0,max:times.at(-1)||0,avg:times.reduce((a,b)=>a+b,0)/(times.length||1),p95:times[Math.floor(times.length*.95)]||0};
+  const d=JSON.parse(raw),total=Math.min(500,Math.max(1,Number(d.total)||30)),concurrency=Math.min(total,20,Math.max(1,Number(d.concurrency)||5));
+  const method=String(d.method||'GET').toUpperCase(),headers={};
+  for(const h of d.headers||[])if(h&&h.key)headers[h.key]=h.value||'';
+  const durations=[],statuses=[],errors=[];let next=0;
+  async function worker(){while(next<total){next++;const t=performance.now();try{
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
+    try{const response=await fetch(d.url,{method,headers,body:['POST','PUT','PATCH'].includes(method)?(d.body||''):undefined,signal:controller.signal});statuses.push(response.status);await response.arrayBuffer();}
+    finally{clearTimeout(timer);}
+  }catch(e){errors.push(e.name==='AbortError'?'Request timed out':e.message);}
+  durations.push(Math.round(performance.now()-t));}}
+  const started=performance.now();await Promise.all(Array.from({length:concurrency},worker));
+  const elapsed=Math.max(1,Math.round(performance.now()-started)),sorted=durations.slice().sort((a,b)=>a-b),success=statuses.filter(x=>x>=200&&x<400).length;
+  const completed=durations.length,networkErrors=errors.length;
+  return {total,completed,success,httpErrors:statuses.length-success,networkErrors,notCompleted:total-completed,timedOut:total-completed>0,avg:sorted.length?Math.round(sorted.reduce((a,b)=>a+b,0)/sorted.length):0,min:sorted[0]||0,max:sorted.at(-1)||0,p95:sorted.length?sorted[Math.floor((sorted.length-1)*.95)]:0,elapsed,rps:completed*1000/elapsed,statuses};
 }
 function startMockServer(raw) {
   const routes=JSON.parse(raw); if(!Array.isArray(routes)||routes.length<1||routes.length>100) throw new Error('Configure between 1 and 100 mock routes.');
