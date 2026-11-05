@@ -1,37 +1,44 @@
 # ApiX
 
-**ApiX 1.8.6** is an Android API client for developers, built with Kotlin, OkHttp and a local HTML interface.
+**ApiX 1.21.1** is an Android API client for developers, built with Kotlin, OkHttp and a self-contained local HTML interface.
 
-## Features
-- REST API, GraphQL and WebSocket clients
-- HTTP methods: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
-- Query parameters, request headers and Bearer / Basic / API Key authentication
-- JSON, raw text and URL-encoded form bodies
-- Response body, headers, cookies, status, duration and size
-- Response search with matching line previews
-- JSON formatting, validation and response diff
-- Request history and saved collections
-- Collection runner with sequential execution, detailed JSON reports and local run history
-- Data-driven collection runner: execute a collection against up to 100 JSON data rows, interpolate row variables in URLs, headers, authorization and bodies, and reset request chaining between rows
-- Compare consecutive test runs to identify regressions, fixes, status changes and timing changes
-- Extended assertions: HTTP status/header checks, deep equality, property, type, length, range and response-time assertions
-- Request chaining inside a collection using `{{prev.access_token}}`, `{{prev.status}}` and `{{prev.raw}}`
-- Collection JSON export and import
-- Named environments, global variables and `{{variable}}` interpolation
-- JWT header and payload decoder (does not verify signatures)
-- Code generator for JavaScript Fetch, Python Requests and PHP cURL
-- cURL import/export
-- Pre-request and response test scripts
-- Response streaming with a 5 MB display limit to protect device memory; oversized text responses are marked as truncated
-- Hardened WebView navigation and disabled mixed-content / file-URL cross-origin access
-- Local persistence; no external CDN or remote UI dependencies
+## Capabilities
 
-## Build
+- REST client with GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS.
+- GraphQL workspace with query, mutation, variables and schema introspection.
+- Native WebSocket client using OkHttp, custom headers, automatic protocol Ping keepalive, reconnect and message history.
+- Query parameters, headers, Bearer / Basic / API Key authentication, JSON, raw and URL-encoded form bodies.
+- Response body, headers, cookies, status, duration, size, search and response diff.
+- Saved requests, nested collections, environments, global variables and request chaining.
+- Collection runner, data-driven execution, scenario builder, assertions and comparable local test reports.
+- Offline JSON Schema validation for the implemented subset of keywords (not a claim of full Draft 7 compliance).
+- Local Mock Server, API monitoring, controlled load testing and basic HTTP security-header review.
+- cURL and OpenAPI import, collection/environment export, code generation and JWT decoding (decode only; no signature verification).
+- Local IndexedDB persistence with a localStorage fallback. No CDN or remote UI assets.
+
+## Data and security notes
+
+- Request history, saved collections, environments, cookies, WebSocket history and reports are stored locally on the device.
+- Requests and WebSocket connections are sent directly to the endpoint selected by the user. ApiX does not proxy API traffic through a developer server.
+- Credentials and tokens saved in environments or request snapshots are sensitive local data. Protect the device and avoid exporting collections that contain secrets.
+- Imported pre-request and test scripts are disabled by default. Only enable script execution for code you trust.
+- The Security Audit tool is a basic HTTP response-header review, not a penetration test or a complete security assessment.
+- Monitoring is an in-app feature; it does not promise uninterrupted background checks or push notifications.
+- Load testing can create significant traffic. Only test systems you own or have explicit permission to test.
+- Cleartext HTTP is supported because API development sometimes requires it. Prefer HTTPS/WSS whenever the target supports it.
+
+## Development build
+
+The current GitHub workflow produces a **debug-signed APK** for development and direct testing:
+
 ```bash
 gradle -p apps/behnam-tester :app:assembleDebug
 ```
 
-APK: `app/build/outputs/apk/debug/app-debug.apk`
+Output: `app/build/outputs/apk/debug/app-debug.apk`
+
+The committed stable debug key exists only to preserve in-place upgrades of development builds. **It must not be used for marketplace distribution.** A commercial release still requires a separate private release/upload keystore, protected CI secrets, a signed release APK/AAB, store policy review, privacy policy and listing materials.
 
 ## Creator
+
 Behnam Ghafari — https://t.me/behnamghafari
