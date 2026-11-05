@@ -33,6 +33,8 @@ class MainActivity : Activity() {
     private val uploadRequestCode = 4812
     private val backupSaveRequestCode = 4813
     private val backupRestoreRequestCode = 4814
+    private val jsonImportRequestCode = 4815
+    @Volatile private var pendingJsonImportType: String = ""
     @Volatile private var pendingBackupJson: String? = null
     @Volatile private var pendingBackupName: String = "apix-backup.json"
     private lateinit var cookieJar: PersistentCookieJar
@@ -750,6 +752,23 @@ class MainActivity : Activity() {
                 }
             }
         }
+        @JavascriptInterface fun chooseJsonFile(importType: String) {
+            runOnUiThread {
+                try {
+                    require(importType == "collections" || importType == "environments") { "نوع فایل نامعتبر است" }
+                    pendingJsonImportType = importType
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/json", "application/octet-stream"))
+                    }
+                    startActivityForResult(intent, jsonImportRequestCode)
+                } catch (e: Exception) {
+                    pendingJsonImportType = ""
+                    Toast.makeText(this@MainActivity, "انتخاب فایل ممکن نیست: " + e.message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         @JavascriptInterface fun chooseUploadFiles() {
             runOnUiThread {
                 try {
@@ -946,6 +965,27 @@ class MainActivity : Activity() {
                     )
                 } catch (e: Exception) {
                     Toast.makeText(this, "خواندن فایل بکاپ ناموفق بود: " + e.message, Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
+        if (requestCode == jsonImportRequestCode) {
+            val importType = pendingJsonImportType
+            pendingJsonImportType = ""
+            if (resultCode == RESULT_OK && data?.data != null) {
+                try {
+                    val uri = data.data!!
+                    val raw = contentResolver.openInputStream(uri)?.use { input ->
+                        val bytes = input.readBytes()
+                        require(bytes.size <= 10 * 1024 * 1024) { "JSON file is larger than 10 MB" }
+                        String(bytes, Charsets.UTF_8)
+                    } ?: throw IllegalStateException("Cannot read selected JSON file")
+                    if (::web.isInitialized) web.evaluateJavascript(
+                        "window.onJsonFileSelected && window.onJsonFileSelected(" +
+                            JSONObject.quote(importType) + "," + JSONObject.quote(raw) + ")", null
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(this, "خواندن فایل ناموفق بود: " + e.message, Toast.LENGTH_LONG).show()
                 }
             }
             return
