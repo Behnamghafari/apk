@@ -753,7 +753,8 @@ class MainActivity : Activity() {
                     val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) cursor.getString(0) else pendingBackupName
                     } ?: pendingBackupName
-                    val result = JSONObject().put("ok", true).put("name", name).put("uri", uri.toString())
+                    val documentPath = try { android.provider.DocumentsContract.getDocumentId(uri) } catch (_: Exception) { uri.toString() }
+                    val result = JSONObject().put("ok", true).put("name", name).put("path", documentPath).put("uri", uri.toString())
                     if (::web.isInitialized) web.evaluateJavascript(
                         "window.onBackupSaved && window.onBackupSaved(" + JSONObject.quote(result.toString()) + ")", null
                     )
