@@ -124,12 +124,12 @@ class ApiXDatabase(context: Context) :
                 "SELECT COUNT(*) FROM request_folders WHERE parent_id = ?", arrayOf(id)
             ).use { it.moveToFirst(); it.getInt(0) }
             check(childCount == 0) { "ابتدا پوشه‌های زیرمجموعه را جابه‌جا یا حذف کنید." }
-            db.delete("request_folders", "id = ?", arrayOf(id)) > 0
+            val deleted = db.delete("request_folders", "id = ?", arrayOf(id)) > 0
+            db.setTransactionSuccessful()
+            deleted
         } finally {
-            if (db.inTransaction()) {
-                db.setTransactionSuccessful()
-                db.endTransaction()
-            }
+            // If validation or deletion fails, endTransaction rolls back automatically.
+            db.endTransaction()
         }
     }
 
