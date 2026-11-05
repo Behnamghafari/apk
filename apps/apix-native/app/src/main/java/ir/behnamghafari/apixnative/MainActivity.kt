@@ -56,7 +56,7 @@ private val ApiXColors: ColorScheme = darkColorScheme()
 
 class MainActivity : ComponentActivity() {
     private val networkExecutor = Executors.newSingleThreadExecutor()
-    private val requestEngine by lazy { HttpRequestEngine() }
+    private val requestEngine by lazy { HttpRequestEngine(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
