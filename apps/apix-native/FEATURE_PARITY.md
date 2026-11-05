@@ -14,7 +14,7 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 - [ ] **Scripting:** pre-request scripts, post-response scripts, script error reporting, assertions and assertion builder.
 - [x] **Environments (basic):** create/update environments, activate/switch environment, persist key/value variables, and interpolate `{{variable}}` in URL, query parameters, headers, body, and auth fields.
 - [~] **Environments (remaining):** secrets and request payloads are now encrypted at rest with Android Keystore-backed AES-GCM, including transparent migration of existing plaintext records. Global variables, duplicate/delete, and import/export remain pending.
-- [ ] **Cookies:** managed cookie jar, add/delete/clear, cookie integration with requests.
+- [~] **Cookies:** OkHttp automatically sends/receives cookies and persists them in encrypted local storage. Cookie manager UI, add/delete/clear controls remain pending.
 - [~] **Collections and folders:** save/update requests, basic folder navigation, Postman Collection v2.1 import/export with nested folder preservation. Nested-folder management, rename/delete, move requests, and sample data remain pending.
 - [~] **History:** request history is persisted; history URLs are encrypted at rest. Restore, delete individual entries, and clear UI remain pending.
 - [~] **Response inspector:** status, timing, final URL, body/headers tabs, JSON pretty-printing, response search, and copy are implemented. Syntax highlighting, download, HTML preview, response diff and cookie inspector remain pending.
@@ -38,6 +38,7 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 - GraphQL request mode with query/mutation, operation name, JSON variables, environment-variable interpolation, and GraphQL request save/restore.
 - AES-GCM at-rest encryption for saved request content, auth credentials, environment variables, and history URLs using an Android Keystore key; legacy plaintext values are migrated on read.
 - Response inspector with Body/Headers tabs, JSON pretty-print toggle, case-insensitive line search, match count, and copy actions.
+- Encrypted persistent cookie jar integrated with OkHttp; cookies are scoped by domain/path and expired entries are cleaned when accessed.
 - CI debug APK build verified successfully for commit `c08266c945adcf497fee090694b8c3a5f13ee596`.
 
 Known limits in this increment: Postman file-based form-data entries are not imported as local files; advanced cURL flags and cURL export are not yet supported.
