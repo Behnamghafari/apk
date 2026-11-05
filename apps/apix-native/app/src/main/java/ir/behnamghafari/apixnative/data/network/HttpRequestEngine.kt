@@ -144,6 +144,9 @@ class HttpRequestEngine(
             spec.headers.none { it.enabled && it.key.equals("Content-Type", true) }) {
             builder.header("Content-Type", "application/json; charset=utf-8")
         }
+        if (requestBody is MultipartBody) {
+            builder.header("Content-Type", requestBody.contentType().toString())
+        }
 
         val startedAt = System.nanoTime()
         return client.newCall(builder.build()).execute().use { response ->
