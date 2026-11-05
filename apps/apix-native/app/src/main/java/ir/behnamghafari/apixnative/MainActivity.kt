@@ -609,12 +609,43 @@ private fun ApiXScreen(
             }
         }
 
-        Text("تاریخچه اخیر", style = MaterialTheme.typography.titleMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("تاریخچه اخیر", style = MaterialTheme.typography.titleMedium)
+            OutlinedButton(onClick = {
+                repository.clearHistory()
+                history = emptyList()
+            }, enabled = history.isNotEmpty()) { Text("پاک‌کردن همه") }
+        }
         history.forEach { item ->
-            Text(
-                "${item.method} · ${item.statusCode ?: "خطا"} · ${item.url}",
-                style = MaterialTheme.typography.bodySmall
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("${item.method} · ${item.statusCode ?: "خطا"}", style = MaterialTheme.typography.bodySmall)
+                    Text(item.url, style = MaterialTheme.typography.bodySmall)
+                }
+                OutlinedButton(onClick = {
+                    requestMode = "rest"
+                    method = item.method
+                    url = item.url
+                    params = ""
+                    headers = ""
+                    body = ""
+                    bodyType = "none"
+                    requestName = ""
+                    response = "درخواست از تاریخچه بارگذاری شد."
+                }) { Text("بازکردن") }
+                OutlinedButton(onClick = {
+                    repository.deleteHistory(item.id)
+                    history = repository.history(8)
+                }) { Text("حذف") }
+            }
         }
 
         Text("Response Inspector", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
