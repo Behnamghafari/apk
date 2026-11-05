@@ -343,12 +343,18 @@ class MainActivity : Activity() {
                             val req = Request.Builder().url(url).get().header("Authorization", "Bearer " + token).build()
                             client.newBuilder().cookieJar(CookieJar.NO_COOKIES).followRedirects(false).followSslRedirects(false)
                                 .callTimeout(15, TimeUnit.SECONDS).build().newCall(req).execute().use { response ->
-                                val body = response.body?.string().orEmpty().take(256 * 1024)
-                                return response.code to body
+                                val source = response.body?.source()
+                                val buffer = okio.Buffer()
+                                if (source != null) source.read(buffer, 256 * 1024L)
+                                return response.code to buffer.readUtf8()
                             }
                         }
+                        val anonymous = fetchWithToken("")
                         val a = fetchWithToken(tokenA)
                         val b = fetchWithToken(tokenB)
+                        val anonymousExposed = anonymous.first in 200..299 && a.first in 200..299 && anonymous.second == a.second
+                        check("Unauthenticated resource access", !anonymousExposed,
+                            if (anonymousExposed) "درخواست بدون توکن همان پاسخ موفق کاربر A را گرفت؛ احتمال نبود کنترل احراز هویت" else "پاسخ بدون توکن: ${anonymous.first}، پاسخ کاربر A: ${a.first}", "HIGH")
                         val bDenied = b.first == 401 || b.first == 403
                         val sameSuccessfulBody = a.first in 200..299 && b.first in 200..299 && a.second == b.second
                         check("Cross-account access (BOLA/IDOR signal)", bDenied || !sameSuccessfulBody,
