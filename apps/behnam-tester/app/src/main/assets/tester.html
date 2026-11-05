@@ -235,9 +235,12 @@ const store={
 function openLegacyApiXDatabase(){return new Promise((resolve,reject)=>{if(!('indexedDB'in window)){resolve(null);return}const req=indexedDB.open('ApiXDatabase',1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('kv'))db.createObjectStore('kv',{keyPath:'key'})};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||Error('Legacy IndexedDB open failed'))})}
 function readLegacyApiXRecords(db){return new Promise((resolve,reject)=>{if(!db){resolve([]);return}const tx=db.transaction('kv','readonly'),req=tx.objectStore('kv').getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error||Error('Legacy IndexedDB read failed'))})}
 async function initializeApiXStorage(){try{
- const legacyDb=await openLegacyApiXDatabase(),legacy=await readLegacyApiXRecords(legacyDb);if(legacyDb)legacyDb.close();
- for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith('bt_')){try{legacy.push({key,value:JSON.parse(localStorage.getItem(key))})}catch(_){}}}
- if(legacy.length)BehnamNative.importStorageRecords(JSON.stringify(legacy));
+ if(BehnamNative.shouldImportLegacyStorage()){
+  const legacyDb=await openLegacyApiXDatabase(),legacy=await readLegacyApiXRecords(legacyDb);if(legacyDb)legacyDb.close();
+  for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith('bt_')){try{legacy.push({key,value:JSON.parse(localStorage.getItem(key))})}catch(_){}}}
+  if(legacy.length)BehnamNative.importStorageRecords(JSON.stringify(legacy));
+  BehnamNative.markLegacyStorageImported();
+ }
  const records=JSON.parse(BehnamNative.getStorageSnapshot()||'[]');records.forEach(record=>storeCache.set(record.key,record.value));
  return 'sqlite';
  }catch(e){storeFallback=true;try{const records=JSON.parse(BehnamNative.getStorageSnapshot()||'[]');records.forEach(record=>storeCache.set(record.key,record.value))}catch(_){}for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith('bt_')){try{storeCache.set(key,JSON.parse(localStorage.getItem(key)))}catch(_){}}}console.warn('ApiX SQLite storage fallback',e);return 'localStorage'}}
