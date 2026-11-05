@@ -185,6 +185,8 @@ async function sendRequest(raw) {
     const d=typeof raw==='string'?JSON.parse(raw):raw; id=d.id || '';
     const url=new URL(d.url); if(!['http:','https:'].includes(url.protocol)) throw new Error('Only HTTP and HTTPS are supported.');
     const headers={}; for(const h of d.headers||[]) if(h && h.enabled!==false && h.key) headers[h.key]=h.value ?? '';
+    const hasCookie=Object.keys(headers).some(k=>k.toLowerCase()==='cookie');
+    if(!hasCookie){const host=url.hostname.toLowerCase(),pathName=url.pathname||'/';const jar=db.prepare('SELECT * FROM cookies').all().filter(c=>(host===c.domain.replace(/^\\./,'').toLowerCase()||host.endsWith('.'+c.domain.replace(/^\\./,'').toLowerCase()))&&pathName.startsWith(c.path||'/')&&(!c.secure||url.protocol==='https:')&&(!c.expires||Date.parse(c.expires)>Date.now()));if(jar.length)headers.Cookie=jar.map(c=>c.name+'='+c.value).join('; ');}
     const method=String(d.method||'GET').toUpperCase();
     let body;
     if(!['GET','HEAD'].includes(method)) {
@@ -196,6 +198,10 @@ async function sendRequest(raw) {
     let response;
     try { response=await fetch(url,{method,headers,body,signal:controller.signal,redirect:d.corsPreflight?'manual':'follow'}); }
     finally { clearTimeout(timer); }
+    for(const rawCookie of (response.headers.getSetCookie?.()||[])){
+      const parts=rawCookie.split(';').map(x=>x.trim());const pair=parts.shift()||'';const eq=pair.indexOf('=');
+      if(eq>0){const name=pair.slice(0,eq),value=pair.slice(eq+1);const domain=(parts.find(x=>/^domain=/i.test(x))||'').split('=')[1]||url.hostname;const cookiePath=(parts.find(x=>/^path=/i.test(x))||'Path=/').split('=')[1]||'/';const expires=(parts.find(x=>/^expires=/i.test(x))||'').slice(8)||null;const maxAge=(parts.find(x=>/^max-age=/i.test(x))||'').slice(8);if(maxAge==='0')db.prepare('DELETE FROM cookies WHERE name=? AND domain=? AND path=?').run(name,domain,cookiePath);else db.prepare('INSERT OR REPLACE INTO cookies(name,value,domain,path,expires,secure,httpOnly) VALUES(?,?,?,?,?,?,?)').run(name,value,domain,cookiePath,expires,/;\\s*secure(?:;|$)/i.test(';'+rawCookie)?1:0,/httponly/i.test(rawCookie)?1:0);}
+    }
     const buf=Buffer.from(await response.arrayBuffer()); const truncated=buf.length>MAX_RESPONSE;
     const bytes=buf.subarray(0,MAX_RESPONSE); const type=response.headers.get('content-type')||'';
     const textual=/json|text\/|xml|javascript|x-www-form-urlencoded/i.test(type)||!type;
@@ -234,5 +240,6 @@ function startMockServer(raw) {
   const routes=JSON.parse(raw); if(!Array.isArray(routes)||routes.length<1||routes.length>100) throw new Error('Configure between 1 and 100 mock routes.');
   if(mockServer) mockServer.close();
   mockServer=http.createServer((req,res)=>{let body='';req.on('data',c=>body+=c);req.on('end',()=>{const route=routes.find(r=>String(r.method||'GET').toUpperCase()===req.method && (r.path||'/')===req.url.split('?')[0]);if(!route){res.writeHead(404,{'content-type':'application/json'});return res.end(JSON.stringify({error:'Not found'}));}const headers=route.headers||{'content-type':'application/json'};res.writeHead(Number(route.status)||200,headers);res.end(route.body??'{}');});});
-  mockServer.listen(0,'127.0.0.1'); return '127.0.0.1';
+  mockServer.on('error',error=>emit('toast','Mock Server: '+error.message));
+  mockServer.listen(8787,'127.0.0.1'); return JSON.stringify({ok:true,url:'http://127.0.0.1:8787'});
 }
