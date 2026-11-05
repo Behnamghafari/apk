@@ -1,6 +1,9 @@
 package ir.behnamghafari.apixnative
 
-import android.os.Bundle\nimport android.net.Uri\nimport androidx.activity.compose.rememberLauncherForActivityResult\nimport androidx.activity.result.contract.ActivityResultContracts
+import android.os.Bundle
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +39,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import ir.behnamghafari.apixnative.data.collection.PostmanCollectionCodec\nimport ir.behnamghafari.apixnative.data.importer.CurlCommandParser\nimport ir.behnamghafari.apixnative.data.model.ApiEnvironment
+import ir.behnamghafari.apixnative.data.collection.PostmanCollectionCodec
+import ir.behnamghafari.apixnative.data.importer.CurlCommandParser\nimport ir.behnamghafari.apixnative.data.model.ApiEnvironment
 import ir.behnamghafari.apixnative.data.model.SavedRequest
 import ir.behnamghafari.apixnative.data.network.HttpKeyValue
 import ir.behnamghafari.apixnative.data.network.HttpRequestEngine
