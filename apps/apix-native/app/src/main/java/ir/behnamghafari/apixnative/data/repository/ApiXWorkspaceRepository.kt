@@ -5,15 +5,18 @@ import ir.behnamghafari.apixnative.data.local.ApiXDatabase
 import ir.behnamghafari.apixnative.data.model.ApiEnvironment
 import ir.behnamghafari.apixnative.data.model.RequestFolder
 import ir.behnamghafari.apixnative.data.model.RequestHistoryEntry
-import ir.behnamghafari.apixnative.data.model.SavedRequest\nimport ir.behnamghafari.apixnative.data.security.SecretVault
+import ir.behnamghafari.apixnative.data.model.SavedRequest
+import ir.behnamghafari.apixnative.data.security.SecretVault
 
-/** Small repository boundary between Compose state and the local workspace database. */
+/** Repository boundary with transparent at-rest encryption for request and environment secrets. */
 class ApiXWorkspaceRepository(context: Context) {
-    private val database = ApiXDatabase(context)\n    private val vault = SecretVault()
+    private val database = ApiXDatabase(context)
+    private val vault = SecretVault()
 
-    fun saveRequest(request: SavedRequest) = database.saveRequest(request)
-    fun savedRequests(folderId: String? = null) = database.getSavedRequests(folderId)
-    fun allSavedRequests() = database.getAllSavedRequests()
+    fun saveRequest(request: SavedRequest) = database.saveRequest(protectRequest(request))
+    fun savedRequests(folderId: String? = null) =
+        database.getSavedRequests(folderId).map(::revealRequest)
+    fun allSavedRequests() = database.getAllSavedRequests().map(::revealRequest)
     fun allFolders() = database.getAllFolders()
     fun deleteRequest(id: String) = database.deleteSavedRequest(id)
 
@@ -36,8 +39,16 @@ class ApiXWorkspaceRepository(context: Context) {
     }
     fun deleteFolder(id: String) = database.deleteFolder(id)
 
-    fun saveEnvironment(environment: ApiEnvironment) = database.saveEnvironment(environment)
-    fun environments() = database.getEnvironments()
+    fun saveEnvironment(environment: ApiEnvironment) =
+        database.saveEnvironment(environment.copy(variablesJson = vault.protect(environment.variablesJson)))
+
+    fun environments() = database.getEnvironments().map { stored ->
+        if (stored.variablesJson.isNotBlank() && !vault.isEncrypted(stored.variablesJson)) {
+            database.saveEnvironment(stored.copy(variablesJson = vault.protect(stored.variablesJson)))
+        }
+        stored.copy(variablesJson = vault.reveal(stored.variablesJson))
+    }
+
     fun activateEnvironment(id: String?) = database.setActiveEnvironment(id)
 
     fun recordHistory(
@@ -82,5 +93,6 @@ class ApiXWorkspaceRepository(context: Context) {
             authConfigJson = vault.reveal(stored.authConfigJson)
         )
     }
-\n    fun close() = database.close()
+
+    fun close() = database.close()
 }
