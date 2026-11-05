@@ -955,9 +955,9 @@ function loadWsConnection(){
   $('url').value=item.url;$('wsHeaders').value=JSON.stringify(item.headers||[],null,2);$('wsPingInterval').value=item.pingInterval??25;$('wsAutoReconnect').checked=item.autoReconnect!==false;$('wsReconnectMax').value=item.reconnectMax??5;
  }else if(kind==='collection'){
   const item=store.get('collections',[]).find(x=>String(x.id)===id);if(!item||!item.req)return BehnamNative.toast('درخواست ذخیره‌شده پیدا نشد');
-  loadSnapshot(item.req);if(item.req.mode!=='websocket')setMode('websocket',false);
+  loadSnapshot(item.req);
  }else return BehnamNative.toast('نوع اتصال پشتیبانی نمی‌شود');
- BehnamNative.toast('تنظیمات اتصال بارگذاری شد');
+ setMode('websocket',false);BehnamNative.toast('تنظیمات اتصال بارگذاری شد');
 }
 function exportWsHistory(){const data={format:'apix-websocket-history',version:1,exportedAt:new Date().toISOString(),messages:wsHistory};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='apix-websocket-history.json';a.click();URL.revokeObjectURL(a.href);BehnamNative.toast('خروجی تاریخچه آماده شد')}
 renderWsConnections();
