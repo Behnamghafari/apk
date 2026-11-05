@@ -51,8 +51,13 @@ class MainActivity : Activity() {
             .followSslRedirects(true)
             .build()
         WindowCompat.setDecorFitsSystemWindows(window, true)
-        window.statusBarColor = android.graphics.Color.rgb(11, 17, 32)
-        window.navigationBarColor = android.graphics.Color.rgb(11, 17, 32)
+        val appSurface = android.graphics.Color.rgb(11, 17, 32)
+        window.decorView.setBackgroundColor(appSurface)
+        window.statusBarColor = appSurface
+        window.navigationBarColor = appSurface
+        val insetsController = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
+        insetsController.isAppearanceLightStatusBars = false
+        insetsController.isAppearanceLightNavigationBars = false
         web = WebView(this).apply {
             setBackgroundColor(android.graphics.Color.rgb(11, 17, 32))
             settings.javaScriptEnabled = true
