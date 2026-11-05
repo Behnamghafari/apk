@@ -1,0 +1,178 @@
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
+const path = require('node:path');
+const fs = require('node:fs');
+const http = require('node:http');
+const { performance } = require('node:perf_hooks');
+const Database = require('better-sqlite3');
+const { WebSocket } = require('ws');
+
+let win, db, mockServer;
+const sockets = new Map();
+const MAX_RESPONSE = 5 * 1024 * 1024;
+
+function emit(name, payload) {
+  if (win && !win.isDestroyed()) win.webContents.send('apix:event', { name, payload });
+}
+function initDb() {
+  const file = path.join(app.getPath('userData'), 'apix.sqlite');
+  db = new Database(file);
+  db.pragma('journal_mode = WAL');
+  db.exec('CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS cookies (name TEXT, value TEXT, domain TEXT, path TEXT, expires TEXT, secure INTEGER DEFAULT 0, httpOnly INTEGER DEFAULT 0, PRIMARY KEY(name,domain,path))');
+}
+function makeWindow() {
+  win = new BrowserWindow({
+    width: 1440, height: 940, minWidth: 900, minHeight: 650,
+    backgroundColor: '#0b1120',
+    title: 'ApiX',
+    autoHideMenuBar: true,
+    webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true }
+  });
+  win.loadFile(path.join(__dirname, '..', 'assets', 'tester.html'));
+  win.on('closed', () => { win = null; });
+}
+app.whenReady().then(() => { initDb(); makeWindow(); app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) makeWindow(); }); });
+app.on('window-all-closed', () => { for (const ws of sockets.values()) try { ws.close(1001, 'Application closing'); } catch {} if (mockServer) mockServer.close(); if (process.platform !== 'darwin') app.quit(); });
+app.on('before-quit', () => { try { if (db) db.close(); } catch {} });
+
+ipcMain.on('apix:sync', (event, action, ...args) => {
+  try {
+    if (action === 'shouldImportLegacyStorage') event.returnValue = db.prepare('SELECT COUNT(*) AS n FROM kv').get().n === 0;
+    else if (action === 'getStorageSnapshot') event.returnValue = JSON.stringify(db.prepare('SELECT key,value FROM kv').all().map(r => ({key:r.key,value:JSON.parse(r.value)})));
+    else if (action === 'setStorageValue') {
+      const [key,value] = args;
+      if (typeof key === 'string' && key.startsWith('bt_') && key.length <= 160 && String(value).length <= 8*1024*1024)
+        db.prepare('INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, JSON.stringify(value));
+      event.returnValue = true;
+    } else if (action === 'getCookies') event.returnValue = JSON.stringify(db.prepare('SELECT * FROM cookies').all());
+    else if (action === 'mockServerStatus') event.returnValue = !!mockServer && mockServer.listening;
+    else if (action === 'getAppVersion') event.returnValue = app.getVersion();
+    else event.returnValue = null;
+  } catch (e) { event.returnValue = null; }
+});
+
+ipcMain.handle('apix:action', async (_event, action, ...args) => {
+  if (action === 'importStorageRecords' || action === 'replaceStorageSnapshot') {
+    const records = JSON.parse(args[0] || '[]');
+    if (!Array.isArray(records)) throw new Error('Invalid storage records');
+    const tx = db.transaction(() => {
+      if (action === 'replaceStorageSnapshot') db.prepare('DELETE FROM kv').run();
+      const put = db.prepare('INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
+      for (const r of records) if (r && typeof r.key === 'string' && r.key.startsWith('bt_') && r.key.length <= 160) put.run(r.key, JSON.stringify(r.value));
+    });
+    tx(); return records.length;
+  }
+  if (action === 'sendRequest') return sendRequest(args[0]);
+  if (action === 'wsConnect') return connectWs(args[0]);
+  if (action === 'wsSend') { const ws=sockets.get(args[0]); if (!ws || ws.readyState!==WebSocket.OPEN) return false; ws.send(args[1]); return true; }
+  if (action === 'wsClose') { const ws=sockets.get(args[0]); if (ws) ws.close(args[1] || 1000,args[2] || 'Closed'); sockets.delete(args[0]); return true; }
+  if (action === 'chooseOpenApiFile' || action === 'chooseJsonFile' || action === 'chooseBackupFile') {
+    const res = await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'API definition and data',extensions:['json','yaml','yml','txt','*']}]});
+    if (!res.canceled && res.filePaths[0]) {
+      const raw=fs.readFileSync(res.filePaths[0],'utf8');
+      if (action==='chooseOpenApiFile') emit('onOpenApiFileSelected',raw,path.basename(res.filePaths[0]));
+      else if (action==='chooseJsonFile') emit('onJsonFileSelected',args[0],raw);
+      else emit('onBackupFileSelected',raw);
+    } return !res.canceled;
+  }
+  if (action === 'saveBackupFile') {
+    const [raw,name] = args;
+    const res=await dialog.showSaveDialog(win,{defaultPath:name || 'apix-backup.json',filters:[{name:'JSON backup',extensions:['json']}]});
+    if (!res.canceled) fs.writeFileSync(res.filePath,raw,'utf8');
+    emit('onBackupSaved',JSON.stringify({ok:!res.canceled,filePath:res.filePath})); return !res.canceled;
+  }
+  if (action === 'createSqliteBackup') {
+    const res=await dialog.showSaveDialog(win,{defaultPath:'apix-backup.sqlite',filters:[{name:'SQLite database',extensions:['sqlite','db']}]});
+    if (!res.canceled) { db.pragma('wal_checkpoint(FULL)'); fs.copyFileSync(path.join(app.getPath('userData'),'apix.sqlite'),res.filePath); }
+    emit('onBackupSaved',JSON.stringify({ok:!res.canceled})); return !res.canceled;
+  }
+  if (action === 'chooseSqliteBackupFile') {
+    const res=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'SQLite backup',extensions:['sqlite','db']}]});
+    if (!res.canceled) emit('onSqliteBackupSelected',JSON.stringify({filePath:res.filePaths[0],desktop:true})); return !res.canceled;
+  }
+  if (action === 'restoreSqliteBackup') throw new Error('Restore is not yet available in the Windows desktop build.');
+  if (action === 'chooseUploadFiles') {
+    const res=await dialog.showOpenDialog(win,{properties:['openFile','multiSelections']});
+    if (!res.canceled) emit('onUploadFilesSelected',JSON.stringify(res.filePaths.map(p=>({name:path.basename(p),path:p,size:fs.statSync(p).size}))));
+    return !res.canceled;
+  }
+  if (action === 'copyText') { clipboard.writeText(args[0] || ''); return true; }
+  if (action === 'openPrivacyPolicy') { await shell.openExternal('https://github.com/Behnamghafari/apk/blob/main/apps/behnam-tester/PRIVACY.md'); return true; }
+  if (action === 'openTelegram') { await shell.openExternal('https://t.me/behnamghafari'); return true; }
+  if (action === 'toast') { emit('toast',args[0]); return true; }
+  if (action === 'addCookie') {
+    const [url,setCookie]=args; const u=new URL(url); const parts=String(setCookie).split(';').map(x=>x.trim()); const [name,value]=parts[0].split('=');
+    const domain=(parts.find(x=>/^domain=/i.test(x))||'').split('=')[1]||u.hostname;
+    const cookiePath=(parts.find(x=>/^path=/i.test(x))||'Path=/').split('=')[1]||'/';
+    db.prepare('INSERT OR REPLACE INTO cookies(name,value,domain,path,secure,httpOnly) VALUES(?,?,?,?,?,?)').run(name,value,domain,cookiePath,/secure/i.test(setCookie)?1:0,/httponly/i.test(setCookie)?1:0);
+    return JSON.stringify({ok:true});
+  }
+  if (action === 'deleteCookie') { db.prepare('DELETE FROM cookies WHERE name=? AND domain=? AND path=?').run(...args); return true; }
+  if (action === 'clearCookies') { db.prepare('DELETE FROM cookies').run(); return true; }
+  if (action === 'startMockServer') return startMockServer(args[0]);
+  if (action === 'stopMockServer') { if(mockServer) mockServer.close(); mockServer=null; return true; }
+  if (action === 'runSecurityAudit') { const result=await securityAudit(args[0]); emit('onSecurityAuditResult',JSON.stringify(result)); return true; }
+  if (action === 'runMonitorCheck') { const result=await monitorCheck(args[0]); emit('onMonitorResult',JSON.stringify(result)); return true; }
+  if (action === 'runLoadTest') { const result=await loadTest(args[0]); emit('onLoadTestResult',JSON.stringify(result)); return true; }
+  if (action === 'sendUploadRequest') { emit('onUploadResult',JSON.stringify({ok:false,error:'Upload bridge is not implemented in this preview build.'})); return false; }
+  if (action === 'restoreSqliteBackup') throw new Error('SQLite restore is not supported yet.');
+  return null;
+});
+
+async function sendRequest(raw) {
+  let id=''; let result;
+  try {
+    const d=typeof raw==='string'?JSON.parse(raw):raw; id=d.id || '';
+    const url=new URL(d.url); if(!['http:','https:'].includes(url.protocol)) throw new Error('Only HTTP and HTTPS are supported.');
+    const headers={}; for(const h of d.headers||[]) if(h && h.enabled!==false && h.key) headers[h.key]=h.value ?? '';
+    const method=String(d.method||'GET').toUpperCase();
+    let body;
+    if(!['GET','HEAD'].includes(method)) {
+      if(d.bodyType==='form') body=new URLSearchParams((d.form||[]).filter(x=>x.enabled!==false && x.key).map(x=>[x.key,x.value||'']));
+      else if(d.bodyType!=='none') body=d.body || undefined;
+    }
+    const start=performance.now();
+    const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),Math.min(300000,Math.max(5000,(d.timeout||60)*1000)));
+    let response;
+    try { response=await fetch(url,{method,headers,body,signal:controller.signal,redirect:d.corsPreflight?'manual':'follow'}); }
+    finally { clearTimeout(timer); }
+    const buf=Buffer.from(await response.arrayBuffer()); const truncated=buf.length>MAX_RESPONSE;
+    const bytes=buf.subarray(0,MAX_RESPONSE); const type=response.headers.get('content-type')||'';
+    const textual=/json|text\/|xml|javascript|x-www-form-urlencoded/i.test(type)||!type;
+    result={id,ok:response.ok,status:response.status,statusText:response.statusText,duration:Math.round(performance.now()-start),size:bytes.length,headers:Object.fromEntries(response.headers.entries()),body:textual?bytes.toString('utf8'):'[Binary response: '+bytes.length+' bytes]',contentType:type,truncated,finalUrl:response.url};
+    if(truncated) result.body+='\n\n[Response truncated at 5 MB]';
+  } catch(e) { result={id,error:e.name==='AbortError'?'Request timed out':e.message}; }
+  emit('onResult',JSON.stringify(result)); return result;
+}
+function connectWs(raw) {
+  const d=JSON.parse(raw), id=String(d.id||''); if(!id) throw new Error('Connection id is required');
+  const headers={}; for(const h of d.headers||[]) if(h && h.enabled!==false && h.key) headers[h.key]=h.value||'';
+  const ws=new WebSocket(d.url,{headers,perMessageDeflate:false,handshakeTimeout:30000});
+  sockets.set(id,ws);
+  const event=(name,extra={})=>emit('onWebSocketEvent',JSON.stringify({id,event:name,...extra}));
+  event('connecting',{url:d.url});
+  ws.on('open',()=>event('open'));
+  ws.on('message',(data,isBinary)=>event('message',{data:isBinary?'[binary message]':data.toString(),binary:isBinary}));
+  ws.on('error',e=>event('error',{error:e.message}));
+  ws.on('close',(code,reason)=>{event('closed',{code,reason:reason.toString()});sockets.delete(id);});
+  return true;
+}
+async function securityAudit(raw) {
+  try { const d=JSON.parse(raw); const r=await fetch(d.url,{method:'GET',headers:{Origin:d.origin||'https://example.invalid'}}); const h=Object.fromEntries(r.headers.entries()); return {ok:true,url:d.url,status:r.status,headers:h,checks:{hsts:!!h['strict-transport-security'],csp:!!h['content-security-policy'],frame:!!(h['x-frame-options']||h['content-security-policy']?.includes('frame-ancestors')),nosniff:h['x-content-type-options']==='nosniff',referrer:!!h['referrer-policy']}}; } catch(e) { return {ok:false,error:e.message}; }
+}
+async function monitorCheck(raw) {
+  try { const d=JSON.parse(raw); const t=performance.now(); const r=await fetch(d.url,{method:d.method||'GET'}); return {ok:r.ok,status:r.status,duration:Math.round(performance.now()-t),url:d.url}; } catch(e) { return {ok:false,error:e.message}; }
+}
+async function loadTest(raw) {
+  const d=JSON.parse(raw), total=Math.min(500,Math.max(1,Number(d.requests)||1)), concurrency=Math.min(20,Math.max(1,Number(d.concurrency)||1));
+  let next=0,done=0,failed=0; const times=[];
+  async function worker(){while(next<total){const i=next++;const t=performance.now();try{const r=await fetch(d.url,{method:d.method||'GET'});if(!r.ok)failed++;await r.arrayBuffer();}catch{failed++;}times.push(performance.now()-t);done++;}}
+  await Promise.all(Array.from({length:concurrency},worker));
+  times.sort((a,b)=>a-b); return {ok:failed===0,total,completed:done,failed,min:times[0]||0,max:times.at(-1)||0,avg:times.reduce((a,b)=>a+b,0)/(times.length||1),p95:times[Math.floor(times.length*.95)]||0};
+}
+function startMockServer(raw) {
+  const routes=JSON.parse(raw); if(!Array.isArray(routes)||routes.length<1||routes.length>100) throw new Error('Configure between 1 and 100 mock routes.');
+  if(mockServer) mockServer.close();
+  mockServer=http.createServer((req,res)=>{let body='';req.on('data',c=>body+=c);req.on('end',()=>{const route=routes.find(r=>String(r.method||'GET').toUpperCase()===req.method && (r.path||'/')===req.url.split('?')[0]);if(!route){res.writeHead(404,{'content-type':'application/json'});return res.end(JSON.stringify({error:'Not found'}));}const headers=route.headers||{'content-type':'application/json'};res.writeHead(Number(route.status)||200,headers);res.end(route.body??'{}');});});
+  mockServer.listen(0,'127.0.0.1'); return '127.0.0.1';
+}
