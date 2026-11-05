@@ -649,35 +649,31 @@ function exportEnvironments(){
  try{BehnamNative.saveBackupFile(JSON.stringify(data,null,2),'apix-environments-'+new Date().toISOString().slice(0,10)+'.json')}
  catch(e){BehnamNative.toast('ساخت فایل محیط‌ها ناموفق بود: '+(e.message||e))}
 }
-function importEnvironments(){
- const picker=document.createElement('input');picker.type='file';picker.accept='.json,application/json';picker.style.display='none';
- picker.addEventListener('change',()=>{
-  const file=picker.files&&picker.files[0];picker.remove();if(!file)return;
-  if(file.size>5*1024*1024){BehnamNative.toast('حجم فایل نباید بیشتر از ۵ مگابایت باشد');return}
-  const reader=new FileReader();
-  reader.onload=()=>{
-   try{
-    const data=JSON.parse(String(reader.result||''));
-    if(!data||!(data.format==='behnam-tester-environments'||Array.isArray(data)) )throw Error('فرمت فایل محیط‌ها معتبر نیست');
-    const list=Array.isArray(data)?data:data.environments;
-    if(!Array.isArray(list))throw Error('فهرست محیط‌ها پیدا نشد');
-    const clean=list.map(e=>{
-     if(!e||typeof e.name!=='string'||!e.name.trim()||!e.values||typeof e.values!=='object'||Array.isArray(e.values))throw Error('ساختار یکی از محیط‌ها معتبر نیست');
-     return {id:'env_imp_'+Date.now()+'_'+Math.random().toString(36).slice(2,9),name:e.name.trim(),values:Object.fromEntries(Object.entries(e.values).map(([k,v])=>[String(k),String(v??'')]))};
-    });
-    const merged=[...store.get('envs',[])];
-    clean.forEach(e=>{const i=merged.findIndex(x=>x.name.toLowerCase()===e.name.toLowerCase());if(i>=0)merged[i]=e;else merged.push(e)});
-    store.set('envs',merged);
-    if(data.globalVariables&&typeof data.globalVariables==='object'&&!Array.isArray(data.globalVariables)){
-     const globals={...store.get('globalVars',{})};Object.entries(data.globalVariables).forEach(([k,v])=>globals[String(k)]=String(v??''));store.set('globalVars',globals);
-    }
-    renderEnvironments();BehnamNative.toast(clean.length+' محیط وارد شد');
-   }catch(e){BehnamNative.toast('ورود محیط‌ها ناموفق بود: '+(e.message||e))}
-  };
-  reader.onerror=()=>BehnamNative.toast('خواندن فایل محیط‌ها ناموفق بود');
-  reader.readAsText(file);
+function importEnvironments(){try{BehnamNative.chooseJsonFile('environments')}catch(e){BehnamNative.toast('انتخاب فایل محیط‌ها ناموفق بود: '+(e.message||e))}}
+function importEnvironmentsData(raw){
+ const data=JSON.parse(raw);
+ if(!data||!(data.format==='behnam-tester-environments'||Array.isArray(data)))throw Error('فرمت فایل محیط‌ها معتبر نیست');
+ const list=Array.isArray(data)?data:data.environments;
+ if(!Array.isArray(list))throw Error('فهرست محیط‌ها پیدا نشد');
+ const clean=list.map(e=>{
+  if(!e||typeof e.name!=='string'||!e.name.trim()||!e.values||typeof e.values!=='object'||Array.isArray(e.values))throw Error('ساختار یکی از محیط‌ها معتبر نیست');
+  return {id:'env_imp_'+Date.now()+'_'+Math.random().toString(36).slice(2,9),name:e.name.trim(),values:Object.fromEntries(Object.entries(e.values).map(([k,v])=>[String(k),String(v??'')]))};
  });
- document.body.appendChild(picker);picker.click();
+ const merged=[...store.get('envs',[])];
+ clean.forEach(e=>{const i=merged.findIndex(x=>x.name.toLowerCase()===e.name.toLowerCase());if(i>=0)merged[i]=e;else merged.push(e)});
+ store.set('envs',merged);
+ if(data.globalVariables&&typeof data.globalVariables==='object'&&!Array.isArray(data.globalVariables)){
+  const globals={...store.get('globalVars',{})};Object.entries(data.globalVariables).forEach(([k,v])=>globals[String(k)]=String(v??''));store.set('globalVars',globals);
+ }
+ renderEnvironments();BehnamNative.toast(clean.length+' محیط وارد شد');
+}
+function onJsonFileSelected(kind,raw){
+ try{
+  if(!raw)throw Error('فایل خالی است');
+  if(kind==='collections')importCollectionsData(raw);
+  else if(kind==='environments')importEnvironmentsData(raw);
+  else throw Error('نوع فایل پشتیبانی نمی‌شود');
+ }catch(e){BehnamNative.toast('ورود فایل ناموفق بود: '+(e.message||e))}
 }
 let generatedCodeSamples={};
 function openCodeGenerator(){
@@ -839,33 +835,20 @@ function exportCollections(){
  try{BehnamNative.saveBackupFile(JSON.stringify(data,null,2),'apix-collections-'+new Date().toISOString().slice(0,10)+'.json')}
  catch(e){BehnamNative.toast('ساخت فایل مجموعه‌ها ناموفق بود: '+(e.message||e))}
 }
-function importCollections(){
- const picker=document.createElement('input');picker.type='file';picker.accept='.json,application/json';picker.style.display='none';
- picker.addEventListener('change',()=>{
-  const file=picker.files&&picker.files[0];picker.remove();if(!file)return;
-  if(file.size>10*1024*1024){BehnamNative.toast('حجم فایل نباید بیشتر از ۱۰ مگابایت باشد');return}
-  const reader=new FileReader();
-  reader.onload=()=>{
-   try{
-    const d=JSON.parse(String(reader.result||''));
-    if(!d||d.format!=='apix-collections'||!Array.isArray(d.folders)||!Array.isArray(d.collections))throw Error('این فایل خروجی معتبر ApiX نیست');
-    if(!d.folders.length)throw Error('فایل هیچ پوشه‌ای ندارد');
-    const ids=new Set();
-    for(const f of d.folders){if(!f||typeof f.id!=='string'||!f.id||typeof f.name!=='string'||!f.name.trim()||ids.has(f.id))throw Error('اطلاعات پوشه‌ها معتبر نیست');ids.add(f.id)}
-    for(const f of d.folders)if(f.parentId&&!ids.has(f.parentId))throw Error('مسیر یکی از پوشه‌ها نامعتبر است');
-    for(const c of d.collections)if(!c||!c.id||!c.req||typeof c.req.url!=='string'||!ids.has(c.folderId))throw Error('اطلاعات یکی از درخواست‌ها نامعتبر است');
-    const oldF=store.get('folders',[]),oldC=store.get('collections',[]),folderMap={},stamp=Date.now();
-    d.folders.forEach((f,i)=>{folderMap[f.id]='imp_'+stamp+'_'+i+'_'+Math.random().toString(36).slice(2,7)});
-    const importedFolders=d.folders.map(f=>({...f,id:folderMap[f.id],parentId:f.parentId?folderMap[f.parentId]:null}));
-    const importedItems=d.collections.map((c,i)=>({...c,id:'imp_req_'+stamp+'_'+i+'_'+Math.random().toString(36).slice(2,7),folderId:folderMap[c.folderId],req:{...c.req,allowScripts:false}}));
-    store.set('folders',oldF.concat(importedFolders));store.set('collections',oldC.concat(importedItems));renderCollections();
-    BehnamNative.toast(importedItems.length+' درخواست و '+importedFolders.length+' پوشه وارد شد');
-   }catch(e){BehnamNative.toast('ورود انجام نشد: '+e.message)}
-  };
-  reader.onerror=()=>BehnamNative.toast('خواندن فایل با خطا مواجه شد');
-  reader.readAsText(file);
- });
- document.body.appendChild(picker);picker.click();
+function importCollections(){try{BehnamNative.chooseJsonFile('collections')}catch(e){BehnamNative.toast('انتخاب فایل مجموعه‌ها ناموفق بود: '+(e.message||e))}}
+function importCollectionsData(raw){
+ const d=JSON.parse(raw);
+ if(!d||d.format!=='apix-collections'||!Array.isArray(d.folders)||!Array.isArray(d.collections))throw Error('این فایل خروجی معتبر ApiX نیست');
+ const ids=new Set();
+ for(const f of d.folders){if(!f||typeof f.id!=='string'||!f.id||typeof f.name!=='string'||!f.name.trim()||ids.has(f.id))throw Error('اطلاعات پوشه‌ها معتبر نیست');ids.add(f.id)}
+ for(const f of d.folders)if(f.parentId&&!ids.has(f.parentId))throw Error('مسیر یکی از پوشه‌ها نامعتبر است');
+ for(const c of d.collections)if(!c||!c.id||!c.req||typeof c.req.url!=='string'||!ids.has(c.folderId))throw Error('اطلاعات یکی از درخواست‌ها نامعتبر است');
+ const oldF=store.get('folders',[]),oldC=store.get('collections',[]),folderMap={},stamp=Date.now();
+ d.folders.forEach((f,i)=>{folderMap[f.id]='imp_'+stamp+'_'+i+'_'+Math.random().toString(36).slice(2,7)});
+ const importedFolders=d.folders.map(f=>({...f,id:folderMap[f.id],parentId:f.parentId?folderMap[f.parentId]:null}));
+ const importedItems=d.collections.map((c,i)=>({...c,id:'imp_req_'+stamp+'_'+i+'_'+Math.random().toString(36).slice(2,7),folderId:folderMap[c.folderId],req:{...c.req,allowScripts:false}}));
+ store.set('folders',oldF.concat(importedFolders));store.set('collections',oldC.concat(importedItems));renderCollections();
+ BehnamNative.toast(importedItems.length+' درخواست و '+importedFolders.length+' پوشه وارد شد');
 }
 function loadApiXDemo(){if(requestMode==='graphql'){ $('url').value='https://countries.trevorblades.com/';$('graphqlOperation').value='GetCountries';$('graphqlQuery').value='query GetCountries { countries { code name } }';$('graphqlVariables').value='{}';queueWorkspaceSave();BehnamNative.toast('نمونه GraphQL آماده شد؛ اجرای آن با دکمه اجرای GraphQL')}else if(requestMode==='websocket'){$('url').value='wss://ws.postman-echo.com/raw';$('wsMessage').value=JSON.stringify({type:'hello',client:'ApiX'});BehnamNative.toast('نمونه WebSocket آماده اتصال شد')}else{$('url').value='https://jsonplaceholder.typicode.com/posts/1';$('method').value='GET';setRows('headerRows',[{key:'Accept',value:'application/json',enabled:true}]);queueWorkspaceSave();BehnamNative.toast('نمونه REST آماده شد؛ برای اجرا ارسال را بزن')}}
 function setMode(mode){
