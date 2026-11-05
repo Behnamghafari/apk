@@ -284,6 +284,10 @@ class MainActivity : Activity() {
                     val requestedMethod = input.optString("method", "PUT").uppercase()
                     val tokenA = input.optString("tokenA").trim()
                     val tokenB = input.optString("tokenB").trim()
+                    val probeParam = input.optString("probeParam").trim()
+                    val probeValue = input.optString("probeValue", "apix-test")
+                    require(probeParam.length <= 80 && !probeParam.contains("\\r") && !probeParam.contains("\\n")) { "نام پارامتر نامعتبر است" }
+                    require(probeValue.length <= 300) { "مقدار پایه بیش از حد طولانی است" }
                     require(url.startsWith("http://") || url.startsWith("https://")) { "URL معتبر نیست" }
                     require(origin.startsWith("http://") || origin.startsWith("https://")) { "Origin معتبر نیست" }
                     require(requestedMethod in setOf("POST", "PUT", "PATCH", "DELETE")) { "متد آزمایشی مجاز نیست" }
@@ -366,6 +370,40 @@ class MainActivity : Activity() {
                             }, "HIGH")
                     } else {
                         check("Cross-account access (BOLA/IDOR signal)", true, "برای این آزمون دو توکن مجزا وارد نشده است؛ بررسی انجام نشد", "INFO")
+                    }
+                    if (probeParam.isNotBlank()) {
+                        val baseUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("URL معتبر نیست")
+                        require(baseUrl.queryParameterNames.size < 100) { "تعداد پارامترهای URL بیش از حد است" }
+                        fun probe(value: String): Pair<Int, String> {
+                            val target = baseUrl.newBuilder().setQueryParameter(probeParam, value).build()
+                            val request = Request.Builder().url(target).get().build()
+                            client.newBuilder().cookieJar(CookieJar.NO_COOKIES).followRedirects(false).followSslRedirects(false)
+                                .callTimeout(12, TimeUnit.SECONDS).build().newCall(request).execute().use { response ->
+                                val source = response.body?.source()
+                                val buffer = okio.Buffer()
+                                if (source != null) source.read(buffer, 96 * 1024L)
+                                return response.code to buffer.readUtf8()
+                            }
+                        }
+                        val baseline = probe(probeValue)
+                        val singleQuote = probe(probeValue + "'")
+                        val doubleQuote = probe(probeValue + "\\\"")
+                        val sqlErrors = listOf("sql syntax", "sqlite_exception", "sqlstate", "unterminated quoted", "mysql_fetch", "postgresql", "odbc", "ora-")
+                        val quoteError = (singleQuote.second + " " + doubleQuote.second).lowercase()
+                        val sqlSignal = sqlErrors.any { quoteError.contains(it) } || (singleQuote.first in 500..599 && baseline.first !in 500..599)
+                        check("SQL injection (error signal)", !sqlSignal,
+                            if (sqlSignal) "تغییر پاسخ یا پیام خطای مرتبط با پایگاه داده پس از افزودن کوتیشن دیده شد؛ نیازمند بررسی دستی" else "با probe کوتیشن، نشانه واضح خطای SQL مشاهده نشد؛ این نتیجه نبود SQLi را ثابت نمی‌کند",
+                            if (sqlSignal) "HIGH" else "INFO")
+                        val marker = "apixxssprobe" + System.currentTimeMillis().toString(36)
+                        val inertMarker = "<apix-probe>$marker</apix-probe>"
+                        val reflected = probe(probeValue + inertMarker)
+                        val isReflected = reflected.second.contains(marker, true)
+                        check("Reflected input (XSS indicator)", !isReflected,
+                            if (isReflected) "marker بی‌خطر ورودی بدون حذف/کدگذاری در پاسخ بازتاب شد؛ زمینه HTML باید دستی بررسی شود" else "marker آزمایشی عیناً در پاسخ دیده نشد",
+                            if (isReflected) "MEDIUM" else "INFO")
+                    } else {
+                        check("SQL injection (error signal)", true, "نام پارامتر Query تعیین نشده؛ آزمون اجرا نشد", "INFO")
+                        check("Reflected input (XSS indicator)", true, "نام پارامتر Query تعیین نشده؛ آزمون اجرا نشد", "INFO")
                     }
                     result.put("status", status).put("finalUrl", finalUrl).put("origin", origin).put("method", requestedMethod)
                         .put("checks", checks)
