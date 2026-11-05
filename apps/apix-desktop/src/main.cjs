@@ -224,15 +224,72 @@ function connectWs(raw) {
   return true;
 }
 async function securityAudit(raw) {
-  try { const d=JSON.parse(raw); const r=await fetch(d.url,{method:'GET',headers:{Origin:d.origin||'https://example.invalid'}}); const h=Object.fromEntries(r.headers.entries()); return {ok:true,url:d.url,status:r.status,headers:h,checks:{hsts:!!h['strict-transport-security'],csp:!!h['content-security-policy'],frame:!!(h['x-frame-options']||h['content-security-policy']?.includes('frame-ancestors')),nosniff:h['x-content-type-options']==='nosniff',referrer:!!h['referrer-policy']}}; } catch(e) { return {ok:false,error:e.message}; }
+  try {
+    const d=JSON.parse(raw),url=new URL(d.url),origin=new URL(d.origin||'https://apix.invalid'),method=String(d.method||'PUT').toUpperCase();
+    if(!['http:','https:'].includes(url.protocol)||!['http:','https:'].includes(origin.protocol))throw new Error('URL یا Origin معتبر نیست');
+    if(!['POST','PUT','PATCH','DELETE'].includes(method))throw new Error('متد آزمایشی مجاز نیست');
+    const tokenA=String(d.tokenA||'').trim(),tokenB=String(d.tokenB||'').trim(),probeParam=String(d.probeParam||'').trim(),probeValue=String(d.probeValue||'apix-test');
+    if(tokenA.length!==0!== (tokenB.length!==0))throw new Error('برای مقایسه دسترسی هر دو توکن را وارد کن');
+    if(probeParam.length>80||/[\\r\\n]/.test(probeParam)||probeValue.length>300)throw new Error('پارامتر آزمایشی معتبر نیست');
+    const checks=[];const check=(name,ok,detail,severity='REVIEW',confidence=severity==='HIGH'?'متوسط':severity==='MEDIUM'?'پایین':'اطلاعاتی',remediation='پیکربندی و رفتار endpoint را با مستندات امنیتی سرویس تطبیق بده.',evidence=null,classification=ok?'بدون نشانه':'نیازمند بررسی')=>checks.push({name,ok,detail,severity,confidence,remediation,evidence,classification});
+    const get=async(target,options={})=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);try{return await fetch(target,{...options,signal:controller.signal,redirect:'manual'});}finally{clearTimeout(timer);}};
+    const first=await get(url);const h=Object.fromEntries(first.headers.entries());const finalUrl=first.url||url.href;const https=new URL(finalUrl).protocol==='https:';
+    check('HTTPS',https,https?'ارتباط نهایی با HTTPS برقرار شد':'آدرس نهایی HTTPS نیست','HIGH');
+    check('Strict-Transport-Security',!https||!!h['strict-transport-security'],h['strict-transport-security']||'هدر HSTS وجود ندارد');
+    check('X-Content-Type-Options',h['x-content-type-options']?.toLowerCase()==='nosniff',h['x-content-type-options']||'هدر وجود ندارد');
+    check('Clickjacking protection',!!(h['x-frame-options']||h['content-security-policy']?.toLowerCase().includes('frame-ancestors')),h['x-frame-options']||h['content-security-policy']||'سیاست frame-ancestors یا X-Frame-Options دیده نشد');
+    check('Content-Security-Policy',!!h['content-security-policy'],h['content-security-policy']||'هدر CSP وجود ندارد');
+    check('Referrer-Policy',!!h['referrer-policy'],h['referrer-policy']||'هدر وجود ندارد');
+    check('Permissions-Policy',!!h['permissions-policy'],h['permissions-policy']||'هدر وجود ندارد');
+    check('Server disclosure',!h.server,h.server||'هدر Server افشا نشده');
+    check('Technology disclosure',!h['x-powered-by'],h['x-powered-by']||'هدر X-Powered-By افشا نشده');
+    const cookies=first.headers.getSetCookie?.()||[];
+    check('Cookie Secure flag',!cookies.length||cookies.every(x=>/;\\s*secure(?:;|$)/i.test(';'+x)),!cookies.length?'کوکی تنظیم نشد':cookies.every(x=>/;\\s*secure(?:;|$)/i.test(';'+x))?'تمام کوکی‌های پاسخ Secure هستند':'حداقل یک کوکی فاقد Secure است','MEDIUM');
+    check('Cookie HttpOnly flag',!cookies.length||cookies.every(x=>/httponly/i.test(x)),!cookies.length?'کوکی تنظیم نشد':cookies.every(x=>/httponly/i.test(x))?'تمام کوکی‌های پاسخ HttpOnly هستند':'حداقل یک کوکی فاقد HttpOnly است','MEDIUM');
+    const pre=await get(url,{method:'OPTIONS',headers:{Origin:origin.href,'Access-Control-Request-Method':method,'Access-Control-Request-Headers':'authorization,content-type'}});
+    const ph=Object.fromEntries(pre.headers.entries()),allowOrigin=ph['access-control-allow-origin']||'',allowMethods=ph['access-control-allow-methods']||'',allowHeaders=ph['access-control-allow-headers']||'';
+    check('CORS origin policy',allowOrigin==='*'||allowOrigin===origin.href,allowOrigin||'Access-Control-Allow-Origin در پاسخ OPTIONS وجود ندارد','MEDIUM');
+    check('CORS requested method',allowMethods.split(',').some(x=>x.trim().toUpperCase()===method||x.trim()==='*'),allowMethods||'Access-Control-Allow-Methods ارسال نشده','MEDIUM');
+    check('CORS requested headers',allowHeaders==='*'||(allowHeaders.toLowerCase().includes('authorization')&&allowHeaders.toLowerCase().includes('content-type')),allowHeaders||'Access-Control-Allow-Headers ارسال نشده','MEDIUM');
+    const credentials=ph['access-control-allow-credentials']==='true';
+    check('CORS wildcard with credentials',!(allowOrigin==='*'&&credentials),allowOrigin==='*'&&credentials?'استفاده از wildcard همراه credentials معتبر نیست':'ترکیب wildcard و credentials مشاهده نشد','HIGH');
+    const allowed=(ph.allow||allowMethods).split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
+    check('Dangerous HTTP methods',!allowed.includes('TRACE')&&!allowed.includes('TRACK'),allowed.length?'متدهای اعلام‌شده: '+allowed.join(', '):'فهرست متدها از پاسخ OPTIONS قابل استخراج نبود','HIGH');
+    check('OPTIONS response',(pre.status>=200&&pre.status<300)||pre.status===204,'کد پاسخ OPTIONS: '+pre.status,'LOW');
+    if(tokenA&&tokenB){
+      const tokenFetch=async token=>{const r=await get(url,{headers:token?{Authorization:'Bearer '+token}:{}});return {status:r.status,body:(await r.text()).slice(0,262144)};};
+      const anonymous=await tokenFetch(''),A=await tokenFetch(tokenA),B=await tokenFetch(tokenB),same=A.status>=200&&A.status<300&&B.status>=200&&B.status<300&&A.body===B.body;
+      check('Unauthenticated resource access',!(anonymous.status>=200&&anonymous.status<300&&A.status>=200&&A.status<300&&anonymous.body===A.body),`پاسخ بدون توکن: ${anonymous.status}، پاسخ کاربر A: ${A.status}`,'HIGH');
+      check('Cross-account access (BOLA/IDOR signal)',B.status===401||B.status===403||!same,B.status===401||B.status===403?`کاربر B با پاسخ ${B.status} رد شد؛ نشانه مثبت کنترل دسترسی`:same?'هر دو حساب پاسخ موفق و بدنه کاملاً یکسان گرفتند؛ احتمال دسترسی بین‌حسابی را دستی بررسی کن':`درخواست A: ${A.status}، درخواست B: ${B.status}`,'HIGH','پایین','در سمت سرور مالکیت هر شیء را برای هر درخواست بررسی کن؛ صرفاً به شناسه ارسالی یا احراز هویت اکتفا نکن.',{anonymousStatus:anonymous.status,accountAStatus:A.status,accountBStatus:B.status,successfulBodiesIdentical:same},same?'نشانه احتمالی؛ تأیید مالکیت لازم است':'با این مقایسه نشانه‌ای مشاهده نشد');
+    }else check('Cross-account access (BOLA/IDOR signal)',true,'برای این آزمون دو توکن مجزا وارد نشده است؛ بررسی انجام نشد','INFO');
+    if(probeParam){
+      const base=new URL(url);const probe=async value=>{const u=new URL(base);u.searchParams.set(probeParam,value);const r=await get(u);return {status:r.status,body:(await r.text()).slice(0,98304)};};
+      const baseline=await probe(probeValue),single=await probe(probeValue+"'"),double=await probe(probeValue+'"'),signatures=['sql syntax','sqlite_exception','sqlstate','unterminated quoted','mysql_fetch','postgresql','odbc','ora-'],quoteText=(single.body+' '+double.body).toLowerCase(),signature=signatures.find(x=>quoteText.includes(x)),sqlSignal=!!signature||((single.status>=500&&single.status<600)&&!(baseline.status>=500&&baseline.status<600));
+      const sqlEvidence={parameter:probeParam,baselineStatus:baseline.status,singleQuoteStatus:single.status,doubleQuoteStatus:double.status,databaseErrorSignature:signature||'',responseExcerpt:(single.body+'\\n'+double.body).slice(0,1200)};
+      check('SQL injection (error signal)',!sqlSignal,sqlSignal?'پس از افزودن کوتیشن، نشانه خطای پایگاه داده یا تغییر غیرعادی کد پاسخ دیده شد؛ exploit تأیید نشده است':'با probe کوتیشن، نشانه واضح خطای SQL مشاهده نشد؛ نبود SQLi ثابت نمی‌شود',sqlSignal?'HIGH':'INFO',sqlSignal?'پایین':'اطلاعاتی','از query پارامتری و prepared statement استفاده کن؛ جزئیات خطای پایگاه داده را به پاسخ عمومی ارسال نکن.',sqlEvidence,sqlSignal?'نشانه احتمالی؛ تأیید دستی لازم است':'نشانه‌ای مشاهده نشد');
+      const marker='apixxssprobe'+Date.now().toString(36),reflected=await probe(probeValue+'<apix-probe>'+marker+'</apix-probe>'),isReflected=reflected.body.toLowerCase().includes(marker.toLowerCase());
+      check('Reflected input (XSS indicator)',!isReflected,isReflected?'marker بی‌خطر ورودی در پاسخ بازتاب شد؛ اجرای کد بررسی نشده و XSS تأیید نشده است':'marker آزمایشی عیناً در پاسخ دیده نشد',isReflected?'MEDIUM':'INFO',isReflected?'پایین':'اطلاعاتی','ورودی را متناسب با context خروجی HTML، attribute، JavaScript یا URL کدگذاری کن؛ برای داده متنی از textContent استفاده کن.',{parameter:probeParam,status:reflected.status,marker,markerReflected:isReflected,responseExcerpt:reflected.body.slice(0,1200)},isReflected?'بازتاب ورودی؛ نیازمند بررسی context و encoding':'نشانه‌ای مشاهده نشد');
+    }else{
+      check('SQL injection (error signal)',true,'نام پارامتر Query تعیین نشده؛ آزمون اجرا نشد','INFO');
+      check('Reflected input (XSS indicator)',true,'نام پارامتر Query تعیین نشده؛ آزمون اجرا نشد','INFO');
+    }
+    return {status:first.status,finalUrl,origin:origin.href,method,checks,passed:checks.filter(x=>x.ok).length,failed:checks.filter(x=>!x.ok).length};
+  } catch(e) { return {error:e.name==='AbortError'?'Request timed out':e.message}; }
 }
 async function monitorCheck(raw) {
-  try { const d=JSON.parse(raw); const t=performance.now(); const r=await fetch(d.url,{method:d.method||'GET'}); return {ok:r.ok,status:r.status,duration:Math.round(performance.now()-t),url:d.url}; } catch(e) { return {ok:false,error:e.message}; }
+  const d=JSON.parse(raw),started=performance.now(),id=d.id||'',checkedAt=Date.now();
+  try{
+    const headers={};for(const h of d.headers||[])if(h&&h.enabled!==false&&h.key)headers[h.key]=h.value||'';
+    const controller=new AbortController(),timeout=Math.min(30000,Math.max(5000,(Number(d.timeoutSeconds)||15)*1000)),timer=setTimeout(()=>controller.abort(),timeout);
+    let response;try{response=await fetch(d.url,{method:d.method||'GET',headers,signal:controller.signal});}finally{clearTimeout(timer);}
+    const duration=Math.round(performance.now()-started),expected=Number(d.expectedStatus)||0;
+    return {id,checkedAt,healthy:expected>0?response.status===expected:response.status>=200&&response.status<400,status:response.status,duration,finalUrl:response.url};
+  }catch(e){return {id,checkedAt,healthy:false,status:null,duration:Math.round(performance.now()-started),error:e.name==='AbortError'?'Request timed out':e.message};}
 }
 async function loadTest(raw) {
   const d=JSON.parse(raw),total=Math.min(500,Math.max(1,Number(d.total)||30)),concurrency=Math.min(total,20,Math.max(1,Number(d.concurrency)||5));
   const method=String(d.method||'GET').toUpperCase(),headers={};
-  for(const h of d.headers||[])if(h&&h.key)headers[h.key]=h.value||'';
+  for(const h of d.headers||[])if(h&&h.enabled!==false&&h.key)headers[h.key]=h.value||'';if(d.contentType&&!Object.keys(headers).some(k=>k.toLowerCase()==='content-type'))headers['Content-Type']=d.contentType;
   const durations=[],statuses=[],errors=[];let next=0;
   async function worker(){while(next<total){next++;const t=performance.now();try{
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);
