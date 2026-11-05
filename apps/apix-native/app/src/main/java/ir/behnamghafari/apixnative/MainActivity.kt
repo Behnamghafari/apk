@@ -1,6 +1,6 @@
 package ir.behnamghafari.apixnative
 
-import android.os.Bundle
+import android.os.Bundle\nimport android.net.Uri\nimport androidx.activity.compose.rememberLauncherForActivityResult\nimport androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import ir.behnamghafari.apixnative.data.model.ApiEnvironment
+import ir.behnamghafari.apixnative.data.collection.PostmanCollectionCodec\nimport ir.behnamghafari.apixnative.data.model.ApiEnvironment
 import ir.behnamghafari.apixnative.data.model.SavedRequest
 import ir.behnamghafari.apixnative.data.network.HttpKeyValue
 import ir.behnamghafari.apixnative.data.network.HttpRequestEngine
@@ -110,6 +110,45 @@ private fun ApiXScreen(
     var environments by remember { mutableStateOf(repository.environments()) }
     var activeEnvironmentId by remember { mutableStateOf(environments.firstOrNull { it.isActive }?.id) }
     var environmentName by remember { mutableStateOf(environments.firstOrNull { it.isActive }?.name ?: "Development") }
+    val importCollectionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                val source = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: error("فایل انتخاب‌شده قابل خواندن نیست.")
+                val collection = PostmanCollectionCodec.parse(source)
+                val root = repository.createFolder(collection.name)
+                val folderCache = mutableMapOf<List<String>, String>(emptyList<String>() to root.id)
+                collection.requests.forEach { imported ->
+                    var parentId = root.id
+                    val path = mutableListOf<String>()
+                    imported.folderPath.forEach { segment ->
+                        path += segment
+                        val key = path.toList()
+                        parentId = folderCache.getOrPut(key) { repository.createFolder(segment, parentId).id }
+                    }
+                    repository.saveRequest(imported.request.copy(folderId = parentId))
+                }
+                folders = repository.folders()
+                savedRequests = repository.savedRequests(selectedFolderId)
+                response = "Collection «${collection.name}» وارد شد؛ ${collection.requests.size} درخواست اضافه شد."
+            }.onFailure { response = "خطای Import: ${it.message}" }
+        }
+    }
+    val exportCollectionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                val json = PostmanCollectionCodec.export(
+                    "ApiX Collection", repository.allFolders(), repository.allSavedRequests()
+                )
+                context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
+                    ?: error("فایل خروجی ساخته نشد.")
+                response = "خروجی Postman با موفقیت ذخیره شد."
+            }.onFailure { response = "خطای Export: ${it.message}" }
+        }
+    }
+
     var environmentVariables by remember {
         mutableStateOf(
             environments.firstOrNull { it.isActive }?.variablesJson?.let { json ->
@@ -246,6 +285,20 @@ private fun ApiXScreen(
         }
         Text(
             "متغیرها با قالب {{نام}} در URL، پارامترها، هدرها، بدنه و مقادیر احراز هویت جایگزین می‌شوند.",
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        Text("Collections · Postman v2.1", style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { importCollectionLauncher.launch("*/*") }, modifier = Modifier.weight(1f)) {
+                Text("Import Collection")
+            }
+            OutlinedButton(onClick = { exportCollectionLauncher.launch("ApiX-collection.json") }, modifier = Modifier.weight(1f)) {
+                Text("Export Collection")
+            }
+        }
+        Text(
+            "ورود ساختار پوشه‌ها و درخواست‌ها را حفظ می‌کند؛ خروجی شامل تمام درخواست‌های ذخیره‌شده است.",
             style = MaterialTheme.typography.bodySmall
         )
 
