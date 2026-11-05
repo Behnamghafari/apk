@@ -14,12 +14,12 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 - [ ] **Scripting:** pre-request scripts, post-response scripts, script error reporting, assertions and assertion builder.
 - [x] **Environments (basic):** create/update environments, activate/switch environment, persist key/value variables, and interpolate `{{variable}}` in URL, query parameters, headers, body, and auth fields.\n- [ ] **Environments (remaining):** global variables, duplicate/delete, secret encryption, import/export.
 - [ ] **Cookies:** managed cookie jar, add/delete/clear, cookie integration with requests.
-- [ ] **Collections and folders:** save/update requests, nested folders, rename/delete, folder navigation, collection import/export, sample data.
+- [~] **Collections and folders:** save/update requests, basic folder navigation, Postman Collection v2.1 import/export with nested folder preservation. Nested-folder management, rename/delete, move requests, and sample data remain pending.
 - [ ] **History:** request history, restore, delete, clear.
 - [ ] **Response inspector:** status, timing, headers, body formatting, syntax highlighting, response search, copy/download, HTML preview, response diff.
 - [ ] **GraphQL:** query/mutation, operation name, variables, formatting, validation, schema introspection and documentation.
 - [ ] **WebSocket:** connect/disconnect, headers, ping, keepalive, auto-reconnect, saved connections, message history and export.
-- [ ] **Import/export:** cURL import/export, Swagger/OpenAPI import (JSON and YAML), collection/environment exports, API documentation export.
+- [~] **Import/export:** common cURL command import and Postman Collection v2.1 import/export are implemented. cURL export, Swagger/OpenAPI import (JSON and YAML), environment export/import, and API documentation export remain pending.
 - [ ] **Test runner:** folder runs, data-driven runs, batch execution, run reports, saved test runs and run comparison.
 - [ ] **Scenarios:** scenario editor, examples, sequential steps, variable extraction/substitution, assertions, execution logs and cancellation.
 - [ ] **Uploads:** file picker, multipart configuration, upload progress/result handling.
@@ -28,7 +28,7 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 - [ ] **Monitoring:** saved endpoint monitors, manual checks, enable/disable, history and scheduled monitoring.
 - [ ] **Storage migration:** read and migrate existing ApiX local records where technically possible, with explicit backup and no destructive overwrite.
 
-## Delivery phases
+## Implemented in the current Native increment\n\n- Postman Collection v2.1 JSON import through Android document picker; nested folders and requests are imported into the local workspace with new IDs (existing records are not overwritten).\n- Postman Collection v2.1 JSON export of the complete saved workspace, including nested folders.\n- cURL command import for common URL, method, header, body, Basic Auth, and GET-with-data options; parsing is local and never executes a shell command.\n- CI debug APK build verified successfully for commit `c08266c945adcf497fee090694b8c3a5f13ee596`.\n\nKnown limits in this increment: Postman file-based form-data entries are not imported as local files; advanced cURL flags and cURL export are not yet supported.\n\n## Delivery phases
 
 1. **Foundation:** navigation, design system, persistence/data models, request workspace, robust HTTP engine, query/header/body/auth support. Basic environment editor and variable interpolation are implemented; encrypted secret storage remains pending.
 2. **Core workflow:** environments, variables, cookies, collections, nested folders, history, import/export and workspace restoration.
