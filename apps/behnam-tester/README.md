@@ -1,6 +1,6 @@
 # ApiX
 
-**ApiX 1.21.1** is an Android API client for developers, built with Kotlin, OkHttp and a self-contained local HTML interface.
+**ApiX 1.21.2** is an Android API client for developers, built with Kotlin, OkHttp and a self-contained local HTML interface.
 
 ## Capabilities
 
