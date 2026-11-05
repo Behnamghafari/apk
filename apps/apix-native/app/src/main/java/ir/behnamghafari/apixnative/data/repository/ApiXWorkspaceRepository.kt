@@ -75,6 +75,7 @@ class ApiXWorkspaceRepository(context: Context) {
         }
         stored.copy(url = vault.reveal(stored.url))
     }
+    fun deleteHistory(id: String) = database.deleteHistoryEntry(id)
     fun clearHistory() = database.clearHistory()
 
     private fun protectRequest(request: SavedRequest): SavedRequest = request.copy(
