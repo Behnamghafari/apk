@@ -12,8 +12,8 @@ android {
         applicationId = "ir.behnamghafari.apitester"
         minSdk = 23
         targetSdk = 35
-        versionCode = 44
-        versionName = "1.23.4"
+        versionCode = 45
+        versionName = "1.23.5"
     }
     signingConfigs {
         create("stableDebug") {
