@@ -39,6 +39,9 @@ assert(html.includes('req:{...c.req,allowScripts:false}'), 'Imported scripts mus
 assert(html.includes("if(mode==='graphql')sendGraphQL();else sendRequest()"), 'GraphQL collection runner routing is missing');
 assert(html.includes("const mode=x.mode||x.req.mode||'rest'"), 'Saved request mode restoration is missing');
 assert(html.includes("r.id!==$('pendingId').value"), 'Stale response protection is missing');
+assert(html.includes('if(r.id!==scenarioRun.currentRequestId)return'), 'Scenario response correlation is missing');
+assert(html.includes('run.currentRequestId=req.id'), 'Scenario request ID tracking is missing');
+assert(html.includes("درخواست قبلی هنوز در حال اجراست"), 'Overlapping request guard is missing');
 assert(html.includes("x.req?.mode!=='websocket'"), 'WebSocket requests must be excluded from REST collection runs');
 assert(html.includes("req:{method,url,allowScripts:true,params:[]"), 'Built-in sample assertions must remain enabled');
 assert(html.includes("wsHistory=wsHistory.slice(0,200)"), 'WebSocket history count must be bounded');
