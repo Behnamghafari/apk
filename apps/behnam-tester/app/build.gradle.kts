@@ -5,6 +5,9 @@ plugins {
 android {
     namespace = "com.behnamghafari.tester"
     compileSdk = 35
+    buildFeatures {
+        buildConfig = true
+    }
     defaultConfig {
         applicationId = "com.behnamghafari.tester"
         minSdk = 23
