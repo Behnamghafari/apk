@@ -65,6 +65,34 @@ ipcMain.on('apix:sync', (event, action, ...args) => {
     } else if (action === 'getCookies') event.returnValue = JSON.stringify(db.prepare('SELECT * FROM cookies').all());
     else if (action === 'mockServerStatus') event.returnValue = !!mockServer && mockServer.listening;
     else if (action === 'getAppVersion') event.returnValue = app.getVersion();
+    else if (action === 'wsSend') { const ws=sockets.get(args[0]); if(ws && ws.readyState===WebSocket.OPEN){ws.send(args[1]);event.returnValue=true;}else event.returnValue=false; }
+    else if (action === 'wsClose') { const ws=sockets.get(args[0]); if(ws)ws.close(args[1]||1000,args[2]||'Closed');sockets.delete(args[0]);event.returnValue=true; }
+    else if (action === 'startMockServer') event.returnValue = startMockServer(args[0]);
+    else if (action === 'stopMockServer') { if(mockServer)mockServer.close();mockServer=null;event.returnValue=true; }
+    else if (action === 'addCookie') {
+      const [url,setCookie]=args;const u=new URL(url);const parts=String(setCookie).split(';').map(x=>x.trim());const [name,value]=parts[0].split('=');
+      const domain=(parts.find(x=>/^domain=/i.test(x))||'').split('=')[1]||u.hostname;
+      const cookiePath=(parts.find(x=>/^path=/i.test(x))||'Path=/').split('=')[1]||'/';
+      db.prepare('INSERT OR REPLACE INTO cookies(name,value,domain,path,secure,httpOnly) VALUES(?,?,?,?,?,?)').run(name,value,domain,cookiePath,/secure/i.test(setCookie)?1:0,/httponly/i.test(setCookie)?1:0);
+      event.returnValue=JSON.stringify({ok:true});
+    }
+    else if (action === 'deleteCookie') { db.prepare('DELETE FROM cookies WHERE name=? AND domain=? AND path=?').run(...args);event.returnValue=true; }
+    else if (action === 'clearCookies') { db.prepare('DELETE FROM cookies').run();event.returnValue=true; }
+    else if (action === 'restoreSqliteBackup') {
+      const selected=dialog.showOpenDialogSync(win,{properties:['openFile'],filters:[{name:'SQLite backup',extensions:['sqlite','db']}]});
+      if(!selected){event.returnValue=JSON.stringify({ok:false,error:'Restore cancelled'});}
+      else {
+        const source=new Database(selected[0],{readonly:true,fileMustExist:true});
+        try {
+          const rows=source.prepare('SELECT key,value FROM kv').all();
+          const map=new Map(rows.map(r=>[r.key,JSON.parse(r.value)]));
+          const folders=Array.isArray(map.get('bt_folders'))?map.get('bt_folders').length:0;
+          const collections=Array.isArray(map.get('bt_collections'))?map.get('bt_collections').length:0;
+          const tx=db.transaction(()=>{db.prepare('DELETE FROM kv').run();const put=db.prepare('INSERT INTO kv(key,value) VALUES(?,?)');for(const row of rows)put.run(row.key,row.value);});
+          tx();event.returnValue=JSON.stringify({ok:true,count:rows.length,folders,collections});
+        } finally { source.close(); }
+      }
+    }
     else event.returnValue = null;
   } catch (e) { event.returnValue = null; }
 });
@@ -106,7 +134,11 @@ ipcMain.handle('apix:action', async (_event, action, ...args) => {
   }
   if (action === 'chooseSqliteBackupFile') {
     const res=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'SQLite backup',extensions:['sqlite','db']}]});
-    if (!res.canceled) emit('onSqliteBackupSelected',JSON.stringify({filePath:res.filePaths[0],desktop:true})); return !res.canceled;
+    if (!res.canceled) {
+      const source=new Database(res.filePaths[0],{readonly:true,fileMustExist:true});
+      try { const rows=source.prepare('SELECT key,value FROM kv').all();const map=new Map(rows.map(r=>[r.key,JSON.parse(r.value)]));emit('onSqliteBackupSelected',JSON.stringify({count:rows.length,folders:Array.isArray(map.get('bt_folders'))?map.get('bt_folders').length:0,collections:Array.isArray(map.get('bt_collections'))?map.get('bt_collections').length:0})); }
+      finally { source.close(); }
+    } return !res.canceled;
   }
   if (action === 'restoreSqliteBackup') throw new Error('Restore is not yet available in the Windows desktop build.');
   if (action === 'chooseUploadFiles') {
@@ -127,12 +159,21 @@ ipcMain.handle('apix:action', async (_event, action, ...args) => {
   }
   if (action === 'deleteCookie') { db.prepare('DELETE FROM cookies WHERE name=? AND domain=? AND path=?').run(...args); return true; }
   if (action === 'clearCookies') { db.prepare('DELETE FROM cookies').run(); return true; }
-  if (action === 'startMockServer') return startMockServer(args[0]);
-  if (action === 'stopMockServer') { if(mockServer) mockServer.close(); mockServer=null; return true; }
+  
   if (action === 'runSecurityAudit') { const result=await securityAudit(args[0]); emit('onSecurityAuditResult',JSON.stringify(result)); return true; }
   if (action === 'runMonitorCheck') { const result=await monitorCheck(args[0]); emit('onMonitorResult',JSON.stringify(result)); return true; }
   if (action === 'runLoadTest') { const result=await loadTest(args[0]); emit('onLoadTestResult',JSON.stringify(result)); return true; }
-  if (action === 'sendUploadRequest') { emit('onUploadResult',JSON.stringify({ok:false,error:'Upload bridge is not implemented in this preview build.'})); return false; }
+  if (action === 'sendUploadRequest') {
+    const d=JSON.parse(args[0]);const form=new FormData();const field=d.fileField||'file';
+    for(const file of d.files||[]){const bytes=fs.readFileSync(file.path);form.append(field,new Blob([bytes]),file.name||path.basename(file.path));}
+    for(const item of d.fields||[])if(item.enabled!==false&&item.key)form.append(item.key,item.value||'');
+    const headers={};for(const h of d.headers||[])if(h.enabled!==false&&h.key)headers[h.key]=h.value||'';
+    if(d.authType==='bearer'&&d.bearerToken)headers.Authorization='Bearer '+d.bearerToken;
+    const started=performance.now();const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),Math.min(600000,Math.max(5000,(d.timeout||120)*1000)));
+    try {const response=await fetch(d.url,{method:d.method||'POST',headers,body:form,signal:controller.signal});const bytes=Buffer.from(await response.arrayBuffer()).subarray(0,MAX_RESPONSE);emit('onUploadResult',JSON.stringify({ok:response.ok,status:response.status,duration:Math.round(performance.now()-started),size:bytes.length,body:bytes.toString('utf8')}));}
+    catch(e){emit('onUploadResult',JSON.stringify({ok:false,error:e.name==='AbortError'?'Upload timed out':e.message}));}
+    finally{clearTimeout(timer);}return true;
+  }
   if (action === 'restoreSqliteBackup') throw new Error('SQLite restore is not supported yet.');
   return null;
 });
