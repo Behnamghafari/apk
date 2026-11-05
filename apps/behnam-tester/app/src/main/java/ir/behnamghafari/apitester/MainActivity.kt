@@ -798,24 +798,25 @@ class MainActivity : Activity() {
                             val meta = android.content.ContentValues().apply {
                                 put("format", "apix-sqlite-backup")
                                 put("version", 1)
-                                put("created_at", java.time.Instant.now().toString())
+                                put("created_at", System.currentTimeMillis().toString())
                             }
                             outputDb.insertOrThrow("apix_backup_meta", null, meta)
                             outputDb.setTransactionSuccessful()
                         } finally { outputDb.endTransaction() }
                     } finally { outputDb.close() }
+                    val completedBackup = backup ?: throw IllegalStateException("SQLite backup file was not created")
                     runOnUiThread {
                         try {
-                            pendingSqliteBackupFile = backup
+                            pendingSqliteBackupFile = completedBackup
                             val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
                                 type = "application/vnd.sqlite3"
-                                putExtra(Intent.EXTRA_TITLE, backup.name)
+                                putExtra(Intent.EXTRA_TITLE, completedBackup.name)
                             }
                             startActivityForResult(intent, sqliteBackupSaveRequestCode)
                         } catch (e: Exception) {
                             pendingSqliteBackupFile = null
-                            backup.delete()
+                            completedBackup.delete()
                             Toast.makeText(this@MainActivity, "باز کردن محل ذخیره بکاپ SQLite ممکن نیست: " + e.message, Toast.LENGTH_LONG).show()
                         }
                     }
