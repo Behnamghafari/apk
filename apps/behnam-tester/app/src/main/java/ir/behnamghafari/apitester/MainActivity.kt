@@ -670,17 +670,24 @@ class MainActivity : Activity() {
                 }
                 val pingSeconds = data.optInt("pingInterval", 25).coerceIn(0, 120)
                 webSockets.remove(id)?.close(1000, "Replaced")
+                // WebSocket gets a dedicated client: an infinite read lifetime, no inherited
+                // call timeout, and explicit handshake/network timeouts.
                 val wsClient = client.newBuilder()
                     .callTimeout(0, TimeUnit.MILLISECONDS)
-                    .connectTimeout(25, TimeUnit.SECONDS)
+                    .connectTimeout(30, TimeUnit.SECONDS)
                     .readTimeout(0, TimeUnit.MILLISECONDS)
-                    .writeTimeout(25, TimeUnit.SECONDS)
+                    .writeTimeout(30, TimeUnit.SECONDS)
                     .pingInterval(pingSeconds.toLong(), TimeUnit.SECONDS)
+                    .retryOnConnectionFailure(true)
                     .build()
                 val terminal = AtomicBoolean(false)
+                deliverWebSocket(JSONObject().put("id", id).put("event", "connecting").put("url", parsed.toString()))
                 val socket = wsClient.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
                     override fun onOpen(webSocket: okhttp3.WebSocket, response: Response) {
-                        deliverWebSocket(JSONObject().put("id", id).put("event", "open").put("protocol", response.header("Sec-WebSocket-Protocol", "")))
+                        deliverWebSocket(JSONObject().put("id", id).put("event", "open")
+                            .put("httpCode", response.code)
+                            .put("protocol", response.header("Sec-WebSocket-Protocol", ""))
+                            .put("extensions", response.header("Sec-WebSocket-Extensions", "")))
                     }
                     override fun onMessage(webSocket: okhttp3.WebSocket, text: String) {
                         val maxChars = 32 * 1024
@@ -712,6 +719,7 @@ class MainActivity : Activity() {
                             .put("httpCode", response?.code ?: 0)
                             .put("httpMessage", response?.message ?: "")
                             .put("responseBody", responseBody)
+                            .put("responseHeaders", response?.headers?.toMultimap()?.mapValues { it.value.joinToString(", ") }?.let { JSONObject(it) } ?: JSONObject())
                             .put("url", parsed.toString()))
                     }
                 })
