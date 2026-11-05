@@ -278,19 +278,28 @@ class MainActivity : Activity() {
             Thread {
                 val result = JSONObject()
                 try {
-                    val url = JSONObject(raw).getString("url").trim()
+                    val input = JSONObject(raw)
+                    val url = input.getString("url").trim()
+                    val origin = input.optString("origin", "https://apix.invalid").trim()
+                    val requestedMethod = input.optString("method", "PUT").uppercase()
                     require(url.startsWith("http://") || url.startsWith("https://")) { "URL معتبر نیست" }
+                    require(origin.startsWith("http://") || origin.startsWith("https://")) { "Origin معتبر نیست" }
+                    require(requestedMethod in setOf("POST", "PUT", "PATCH", "DELETE")) { "متد آزمایشی مجاز نیست" }
+                    val checks = JSONArray()
+                    fun check(name: String, ok: Boolean, detail: String, severity: String = "REVIEW") {
+                        checks.put(JSONObject().put("name", name).put("ok", ok).put("detail", detail).put("severity", severity))
+                    }
+                    var status = 0
+                    var finalUrl = url
                     client.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
                         val headers = response.headers
-                        val checks = JSONArray()
-                        fun check(name: String, ok: Boolean, detail: String) {
-                            checks.put(JSONObject().put("name", name).put("ok", ok).put("detail", detail))
-                        }
+                        status = response.code
+                        finalUrl = response.request.url.toString()
                         val https = response.request.url.isHttps
-                        check("HTTPS", https, if (https) "ارتباط نهایی با HTTPS برقرار شد" else "آدرس نهایی HTTPS نیست")
+                        check("HTTPS", https, if (https) "ارتباط نهایی با HTTPS برقرار شد" else "آدرس نهایی HTTPS نیست", "HIGH")
                         check("Strict-Transport-Security", !https || headers["Strict-Transport-Security"] != null, headers["Strict-Transport-Security"] ?: "هدر HSTS وجود ندارد")
                         check("X-Content-Type-Options", headers["X-Content-Type-Options"]?.equals("nosniff", true) == true, headers["X-Content-Type-Options"] ?: "هدر وجود ندارد")
-                        check("X-Frame-Options", headers["X-Frame-Options"] != null || headers["Content-Security-Policy"]?.contains("frame-ancestors", true) == true, headers["X-Frame-Options"] ?: headers["Content-Security-Policy"] ?: "هدر محافظت در برابر Clickjacking وجود ندارد")
+                        check("Clickjacking protection", headers["X-Frame-Options"] != null || headers["Content-Security-Policy"]?.contains("frame-ancestors", true) == true, headers["X-Frame-Options"] ?: headers["Content-Security-Policy"] ?: "سیاست frame-ancestors یا X-Frame-Options دیده نشد")
                         check("Content-Security-Policy", headers["Content-Security-Policy"] != null, headers["Content-Security-Policy"] ?: "هدر CSP وجود ندارد")
                         check("Referrer-Policy", headers["Referrer-Policy"] != null, headers["Referrer-Policy"] ?: "هدر وجود ندارد")
                         check("Permissions-Policy", headers["Permissions-Policy"] != null, headers["Permissions-Policy"] ?: "هدر وجود ندارد")
@@ -298,15 +307,40 @@ class MainActivity : Activity() {
                         check("Server disclosure", server.isNullOrBlank(), server ?: "هدر Server افشا نشده")
                         val powered = headers["X-Powered-By"]
                         check("Technology disclosure", powered.isNullOrBlank(), powered ?: "هدر X-Powered-By افشا نشده")
-                        val cors = headers["Access-Control-Allow-Origin"]
-                        check("CORS wildcard", cors != "*", cors ?: "هدر Access-Control-Allow-Origin ارسال نشده")
-                        val cookie = headers.values("Set-Cookie").joinToString(";")
-                        check("Cookie flags", cookie.isBlank() || (cookie.contains("secure", true) && cookie.contains("httponly", true)), if (cookie.isBlank()) "کوکی در پاسخ تنظیم نشد" else cookie)
-                        result.put("status", response.code).put("finalUrl", response.request.url.toString())
-                            .put("checks", checks).put("passed", (0 until checks.length()).count { checks.getJSONObject(it).optBoolean("ok") })
-                            .put("failed", (0 until checks.length()).count { !checks.getJSONObject(it).optBoolean("ok") })
+                        val cookieHeaders = headers.values("Set-Cookie")
+                        val cookiesSecure = cookieHeaders.all { it.contains("secure", true) }
+                        val cookiesHttpOnly = cookieHeaders.all { it.contains("httponly", true) }
+                        check("Cookie Secure flag", cookieHeaders.isEmpty() || cookiesSecure, if (cookieHeaders.isEmpty()) "کوکی تنظیم نشد" else if (cookiesSecure) "تمام کوکی‌های پاسخ Secure هستند" else "حداقل یک کوکی فاقد Secure است", "MEDIUM")
+                        check("Cookie HttpOnly flag", cookieHeaders.isEmpty() || cookiesHttpOnly, if (cookieHeaders.isEmpty()) "کوکی تنظیم نشد" else if (cookiesHttpOnly) "تمام کوکی‌های پاسخ HttpOnly هستند" else "حداقل یک کوکی فاقد HttpOnly است", "MEDIUM")
                     }
-                } catch (e: Exception) { result.put("error", e.message ?: "Security audit failed") }
+                    val preflight = Request.Builder().url(url)
+                        .method("OPTIONS", null)
+                        .header("Origin", origin)
+                        .header("Access-Control-Request-Method", requestedMethod)
+                        .header("Access-Control-Request-Headers", "authorization,content-type")
+                        .build()
+                    client.newCall(preflight).execute().use { response ->
+                        val h = response.headers
+                        val allowOrigin = h["Access-Control-Allow-Origin"]
+                        val originAllowed = allowOrigin == "*" || allowOrigin == origin
+                        check("CORS origin policy", originAllowed, allowOrigin ?: "Access-Control-Allow-Origin در پاسخ OPTIONS وجود ندارد", "MEDIUM")
+                        val allowMethods = h["Access-Control-Allow-Methods"].orEmpty()
+                        val methodAllowed = allowMethods.split(",").any { it.trim().equals(requestedMethod, true) || it.trim() == "*" }
+                        check("CORS requested method", methodAllowed, allowMethods.ifBlank { "Access-Control-Allow-Methods ارسال نشده" }, "MEDIUM")
+                        val allowHeaders = h["Access-Control-Allow-Headers"].orEmpty()
+                        val headersAllowed = allowHeaders == "*" || (allowHeaders.contains("authorization", true) && allowHeaders.contains("content-type", true))
+                        check("CORS requested headers", headersAllowed, allowHeaders.ifBlank { "Access-Control-Allow-Headers ارسال نشده" }, "MEDIUM")
+                        val credentials = h["Access-Control-Allow-Credentials"]?.equals("true", true) == true
+                        check("CORS wildcard with credentials", !(allowOrigin == "*" && credentials), if (allowOrigin == "*" && credentials) "استفاده از wildcard همراه credentials معتبر نیست" else "ترکیب wildcard و credentials مشاهده نشد", "HIGH")
+                        val allowed = (h["Allow"] ?: allowMethods).split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }
+                        check("Dangerous HTTP methods", "TRACE" !in allowed && "TRACK" !in allowed, if (allowed.isEmpty()) "فهرست متدها از پاسخ OPTIONS قابل استخراج نبود" else "متدهای اعلام‌شده: " + allowed.joinToString(", "), "HIGH")
+                        check("OPTIONS response", response.code in 200..299 || response.code == 204, "کد پاسخ OPTIONS: ${response.code}", "LOW")
+                    }
+                    result.put("status", status).put("finalUrl", finalUrl).put("origin", origin).put("method", requestedMethod)
+                        .put("checks", checks)
+                        .put("passed", (0 until checks.length()).count { checks.getJSONObject(it).optBoolean("ok") })
+                        .put("failed", (0 until checks.length()).count { !checks.getJSONObject(it).optBoolean("ok") })
+                } catch (e: Exception) { result.put("error", e.message ?: "Security assessment failed") }
                 runOnUiThread { if (::web.isInitialized) web.evaluateJavascript(
                     "window.BehnamTester && window.BehnamTester.onSecurityAuditResult(" + JSONObject.quote(result.toString()) + ")", null
                 ) }
