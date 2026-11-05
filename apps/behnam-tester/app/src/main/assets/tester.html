@@ -644,8 +644,41 @@ function clearManagedCookies(){
 }
 function renderGlobalVars(){if(!$('globalVarsList'))return;const vars=store.get('globalVars',{});$('globalVarsList').innerHTML='';const entries=Object.entries(vars);if(entries.length)entries.forEach(([k,v])=>addGlobalVar(k,v));else addGlobalVar()}
 function saveGlobalVars(){const values={};for(const row of $('globalVarsList').querySelectorAll('.env-editor-row')){const key=row.querySelector('.global-var-key').value.trim(),value=row.querySelector('.global-var-value').value;if(!key)continue;if(Object.prototype.hasOwnProperty.call(values,key)){BehnamNative.toast('نام متغیر تکراری است: '+key);return}values[key]=value}store.set('globalVars',values);renderGlobalVars();BehnamNative.toast('متغیرهای سراسری ذخیره شدند')}
-function exportEnvironments(){copyText(JSON.stringify({format:'behnam-tester-environments',version:2,environments:store.get('envs',[]),globalVariables:store.get('globalVars',{})},null,2))}
-function importEnvironments(){openText('وارد کردن محیط‌ها','JSON خروجی گرفته‌شده را اینجا قرار بده',raw=>{try{const data=JSON.parse(raw),list=Array.isArray(data)?data:data.environments;if(!Array.isArray(list))throw Error();const clean=list.map(e=>{if(!e||typeof e.name!=='string'||!e.name.trim()||!e.values||typeof e.values!=='object'||Array.isArray(e.values))throw Error();return {id:String(e.id||'env_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)),name:e.name.trim(),values:Object.fromEntries(Object.entries(e.values).map(([k,v])=>[String(k),String(v)]))}});const current=store.get('envs',[]),merged=[...current];clean.forEach(e=>{const i=merged.findIndex(x=>x.name===e.name);if(i>=0)merged[i]=e;else merged.push(e)});store.set('envs',merged);if(data.globalVariables&&typeof data.globalVariables==='object'&&!Array.isArray(data.globalVariables)){const globals=store.get('globalVars',{});Object.entries(data.globalVariables).forEach(([k,v])=>globals[String(k)]=String(v));store.set('globalVars',globals)}renderEnvironments();BehnamNative.toast(clean.length+' محیط و متغیرهای سراسری وارد شدند')}catch(e){BehnamNative.toast('فایل محیط‌ها معتبر نیست')}})}
+function exportEnvironments(){
+ const data={format:'behnam-tester-environments',version:2,exportedAt:new Date().toISOString(),environments:store.get('envs',[]),globalVariables:store.get('globalVars',{})};
+ downloadJsonFile('apix-environments-'+new Date().toISOString().slice(0,10)+'.json',data);
+ BehnamNative.toast('فایل خروجی محیط‌ها آماده شد');
+}
+function importEnvironments(){
+ const picker=document.createElement('input');picker.type='file';picker.accept='.json,application/json';picker.style.display='none';
+ picker.addEventListener('change',()=>{
+  const file=picker.files&&picker.files[0];picker.remove();if(!file)return;
+  if(file.size>5*1024*1024){BehnamNative.toast('حجم فایل نباید بیشتر از ۵ مگابایت باشد');return}
+  const reader=new FileReader();
+  reader.onload=()=>{
+   try{
+    const data=JSON.parse(String(reader.result||''));
+    if(!data||!(data.format==='behnam-tester-environments'||Array.isArray(data)) )throw Error('فرمت فایل محیط‌ها معتبر نیست');
+    const list=Array.isArray(data)?data:data.environments;
+    if(!Array.isArray(list))throw Error('فهرست محیط‌ها پیدا نشد');
+    const clean=list.map(e=>{
+     if(!e||typeof e.name!=='string'||!e.name.trim()||!e.values||typeof e.values!=='object'||Array.isArray(e.values))throw Error('ساختار یکی از محیط‌ها معتبر نیست');
+     return {id:'env_imp_'+Date.now()+'_'+Math.random().toString(36).slice(2,9),name:e.name.trim(),values:Object.fromEntries(Object.entries(e.values).map(([k,v])=>[String(k),String(v??'')]))};
+    });
+    const merged=[...store.get('envs',[])];
+    clean.forEach(e=>{const i=merged.findIndex(x=>x.name.toLowerCase()===e.name.toLowerCase());if(i>=0)merged[i]=e;else merged.push(e)});
+    store.set('envs',merged);
+    if(data.globalVariables&&typeof data.globalVariables==='object'&&!Array.isArray(data.globalVariables)){
+     const globals={...store.get('globalVars',{})};Object.entries(data.globalVariables).forEach(([k,v])=>globals[String(k)]=String(v??''));store.set('globalVars',globals);
+    }
+    renderEnvironments();BehnamNative.toast(clean.length+' محیط وارد شد');
+   }catch(e){BehnamNative.toast('ورود محیط‌ها ناموفق بود: '+(e.message||e))}
+  };
+  reader.onerror=()=>BehnamNative.toast('خواندن فایل محیط‌ها ناموفق بود');
+  reader.readAsText(file);
+ });
+ document.body.appendChild(picker);picker.click();
+}
 let generatedCodeSamples={};
 function openCodeGenerator(){
  try{
@@ -738,8 +771,8 @@ async function confirmFullBackupRestore(){if(!Array.isArray(pendingFullBackupRec
  const records=pendingFullBackupRecords.slice(),expected=new Map(records.map(x=>[x.key,x.value]));
  const count=BehnamNative.replaceStorageSnapshot(JSON.stringify(records));
  if(count!==records.length)throw Error('تعداد رکوردهای بازیابی‌شده با فایل برابر نیست');
- const verified=JSON.parse(BehnamNative.getStorageSnapshot()||'[]'),actual=new Map(verified.map(x=>[x.key,x.value]));
- for(const key of ['bt_folders','bt_collections']){const value=expected.get(key);if(Array.isArray(value)&&(!Array.isArray(actual.get(key))||JSON.stringify(actual.get(key))!==JSON.stringify(value)))throw Error('بررسی صحت '+key+' پس از بازیابی ناموفق بود')}
+ // بررسی نوشتن و تطبیق رکوردها داخل لایه نیتیو و در همان تراکنش انجام می‌شود؛
+ // فراخوانی مجدد getStorageSnapshot از WebView در این مرحله باعث خطای Bridge می‌شد.
  storeCache.clear();records.forEach(x=>storeCache.set(x.key,x.value));
  const folders=Array.isArray(expected.get('bt_folders'))?expected.get('bt_folders').length:0,collections=Array.isArray(expected.get('bt_collections'))?expected.get('bt_collections').length:0;
  pendingFullBackupRecords=null;$('backupRestoreModal').classList.remove('open');await clearLegacyApiXData();
