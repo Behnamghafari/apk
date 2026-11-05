@@ -9,7 +9,7 @@
     "start": "electron .",
     "dist:win": "electron-builder --win nsis",
     "dist:portable": "electron-builder --win portable",
-    "check": "node --check src/main.cjs && node --check src/preload.cjs",
+    "check": "node --check src/main.cjs && node --check src/preload.cjs && node scripts/check-html.cjs",
     "postinstall": "electron-builder install-app-deps"
   },
   "devDependencies": {
