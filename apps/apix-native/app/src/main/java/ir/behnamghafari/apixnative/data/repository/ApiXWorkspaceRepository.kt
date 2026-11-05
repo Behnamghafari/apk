@@ -86,7 +86,7 @@ class ApiXWorkspaceRepository(context: Context) {
     )
 
     private fun revealRequest(stored: SavedRequest): SavedRequest {
-        val values = listOf(stored.url, stored.headersJson, stored.paramsJson, stored.body, stored.authConfigJson)
+        val values = listOf(stored.name, stored.url, stored.headersJson, stored.paramsJson, stored.body, stored.authConfigJson)
         if (values.any { it.isNotBlank() && !vault.isEncrypted(it) }) {
             database.saveRequest(protectRequest(stored))
         }
