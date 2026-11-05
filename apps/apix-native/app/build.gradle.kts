@@ -9,7 +9,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "ir.behnamghafari.apixnative"
+        applicationId = "ir.behnamghafari.apix"
         minSdk = 23
         targetSdk = 35
         versionCode = 1
