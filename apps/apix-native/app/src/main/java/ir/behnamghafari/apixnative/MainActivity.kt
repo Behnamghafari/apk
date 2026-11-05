@@ -318,7 +318,7 @@ private fun ApiXScreen(
             }
         }
 
-        Text("محیط‌ها (Environments)", style = MaterialTheme.typography.titleMedium)
+        ApiXSectionTitle("محیط‌ها (Environments)")
         OutlinedTextField(
             value = environmentName, onValueChange = { environmentName = it },
             modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("نام محیط") }
@@ -381,7 +381,7 @@ private fun ApiXScreen(
             style = MaterialTheme.typography.bodySmall
         )
 
-        Text("Import cURL", style = MaterialTheme.typography.titleMedium)
+        ApiXSectionTitle("Import cURL")
         OutlinedTextField(
             value = curlInput, onValueChange = { curlInput = it },
             modifier = Modifier.fillMaxWidth(), minLines = 2,
@@ -399,7 +399,7 @@ private fun ApiXScreen(
             enabled = curlInput.isNotBlank(), modifier = Modifier.fillMaxWidth()
         ) { Text("تبدیل cURL به درخواست") }
 
-        Text("Collections · Postman v2.1", style = MaterialTheme.typography.titleMedium)
+        ApiXSectionTitle("Collections · Postman v2.1")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = { importCollectionLauncher.launch("*/*") }, modifier = Modifier.weight(1f)) {
                 Text("Import Collection")
@@ -413,7 +413,7 @@ private fun ApiXScreen(
             style = MaterialTheme.typography.bodySmall
         )
 
-        Text("پوشه‌های درخواست", style = MaterialTheme.typography.titleMedium)
+        ApiXSectionTitle("پوشه‌های درخواست")
         Text(
             if (selectedFolderId == null) "مسیر فعلی: ریشه" else {
                 val current = allFolders.firstOrNull { it.id == selectedFolderId }
@@ -510,7 +510,7 @@ private fun ApiXScreen(
         }
 
         if (requestMode == "graphql") {
-            Text("GraphQL Query", style = MaterialTheme.typography.titleSmall)
+            ApiXSectionTitle("GraphQL Query")
             OutlinedTextField(
                 value = graphQlQuery, onValueChange = { graphQlQuery = it },
                 modifier = Modifier.fillMaxWidth(), minLines = 6,
@@ -528,19 +528,19 @@ private fun ApiXScreen(
             )
         }
 
-        Text("Query Parameters · هر خط key=value", style = MaterialTheme.typography.titleSmall)
+        ApiXSectionTitle("Query Parameters · هر خط key=value")
         OutlinedTextField(
             value = params, onValueChange = { params = it }, modifier = Modifier.fillMaxWidth(),
             minLines = 2, label = { Text("پارامترها") }
         )
 
-        Text("Headers · هر خط Name: Value", style = MaterialTheme.typography.titleSmall)
+        ApiXSectionTitle("Headers · هر خط Name: Value")
         OutlinedTextField(
             value = headers, onValueChange = { headers = it }, modifier = Modifier.fillMaxWidth(),
             minLines = 2, label = { Text("هدرهای درخواست") }
         )
 
-        Text("Authorization", style = MaterialTheme.typography.titleSmall)
+        ApiXSectionTitle("Authorization")
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             authTypes.forEach { type ->
                 OutlinedButton(onClick = { authType = type }) {
@@ -572,7 +572,7 @@ private fun ApiXScreen(
         }
 
         if (requestMode == "rest") {
-            Text("Request Body", style = MaterialTheme.typography.titleSmall)
+            ApiXSectionTitle("Request Body")
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             bodyTypes.forEach { type ->
                 OutlinedButton(onClick = { bodyType = type }) {
@@ -689,7 +689,7 @@ private fun ApiXScreen(
             Text("ارسال درخواست")
         }
 
-        Text("ذخیره درخواست", style = MaterialTheme.typography.titleSmall)
+        ApiXSectionTitle("ذخیره درخواست")
         OutlinedTextField(
             value = requestName, onValueChange = { requestName = it },
             modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("نام درخواست") }
@@ -724,7 +724,7 @@ private fun ApiXScreen(
             modifier = Modifier.fillMaxWidth()
         ) { Text("☆ ذخیره درخواست") }
 
-        Text("درخواست‌های ذخیره‌شده (${savedRequests.size})", style = MaterialTheme.typography.titleMedium)
+        ApiXSectionTitle("درخواست‌های ذخیره‌شده (${savedRequests.size})")
         savedRequests.forEach { saved ->
             var moveMenuOpen by remember(saved.id) { mutableStateOf(false) }
             Row(
@@ -767,7 +767,7 @@ private fun ApiXScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("تاریخچه اخیر", style = MaterialTheme.typography.titleMedium)
+            ApiXSectionTitle("تاریخچه اخیر")
             OutlinedButton(onClick = {
                 repository.clearHistory()
                 history = emptyList()
@@ -804,7 +804,7 @@ private fun ApiXScreen(
             }
         }
 
-        Text("Response Inspector", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        ApiXSectionTitle("Response Inspector")
         Text(response, style = MaterialTheme.typography.bodySmall)
         if (responseFinalUrl.isNotBlank()) {
             Text(responseFinalUrl, style = MaterialTheme.typography.bodySmall)
@@ -927,5 +927,26 @@ private fun ApiXHeaderMetric(label: String, value: String, modifier: Modifier = 
             fontWeight = FontWeight.Bold)
         Text(value, color = Color.White, style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun ApiXSectionTitle(title: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(
+            modifier = Modifier.width(4.dp).height(22.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFF55DEC9))
+        )
+        Text(
+            title,
+            color = Color(0xFFEAF2FC),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
