@@ -419,9 +419,6 @@ class MainActivity : Activity() {
                     override fun onMessage(webSocket: okhttp3.WebSocket, bytes: okio.ByteString) {
                         deliverWebSocket(JSONObject().put("id", id).put("event", "message").put("message", "[Binary message · ${bytes.size} bytes]").put("binary", true))
                     }
-                    override fun onPong(webSocket: okhttp3.WebSocket, payload: okio.ByteString) {
-                        deliverWebSocket(JSONObject().put("id", id).put("event", "pong").put("bytes", payload.size))
-                    }
                     override fun onClosing(webSocket: okhttp3.WebSocket, code: Int, reason: String) {
                         deliverWebSocket(JSONObject().put("id", id).put("event", "closing").put("code", code).put("reason", reason))
                     }
