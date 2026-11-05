@@ -202,7 +202,8 @@ private fun ApiXScreen(
     fun effectiveBody(): String {
         if (requestMode != "graphql") return body
         val variables = activeVariables()
-        require(graphQlQuery.isNotBlank()) { "متن GraphQL خالی است." }\n        val variablesObject = JSONObject(resolveVariables(graphQlVariables, variables))
+        require(graphQlQuery.isNotBlank()) { "متن GraphQL خالی است." }
+        val variablesObject = JSONObject(resolveVariables(graphQlVariables, variables))
         return JSONObject()
             .put("query", resolveVariables(graphQlQuery, variables))
             .put("variables", variablesObject)
@@ -228,6 +229,18 @@ private fun ApiXScreen(
         }
         body = saved.body
         bodyType = saved.bodyType
+        requestMode = "rest"
+        if (saved.bodyType == "json") {
+            runCatching {
+                val graphQl = JSONObject(saved.body)
+                if (graphQl.has("query")) {
+                    requestMode = "graphql"
+                    graphQlQuery = graphQl.optString("query")
+                    graphQlVariables = graphQl.optJSONObject("variables")?.toString(2) ?: "{}"
+                    graphQlOperationName = graphQl.optString("operationName")
+                }
+            }
+        }
         authType = saved.authType
         val auth = JSONObject(saved.authConfigJson)
         authToken = auth.optString("token")
