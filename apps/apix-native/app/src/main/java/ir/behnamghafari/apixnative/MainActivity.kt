@@ -2,6 +2,7 @@ package ir.behnamghafari.apixnative
 
 import android.os.Bundle
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
@@ -44,6 +45,7 @@ import ir.behnamghafari.apixnative.data.importer.CurlCommandParser
 import ir.behnamghafari.apixnative.data.model.ApiEnvironment
 import ir.behnamghafari.apixnative.data.model.SavedRequest
 import ir.behnamghafari.apixnative.data.network.HttpKeyValue
+import ir.behnamghafari.apixnative.data.network.HttpMultipartFile
 import ir.behnamghafari.apixnative.data.network.HttpRequestEngine
 import ir.behnamghafari.apixnative.data.network.HttpRequestSpec
 import ir.behnamghafari.apixnative.data.network.HttpResponseSnapshot
@@ -88,12 +90,14 @@ private fun ApiXScreen(
     val repository = remember(context) { ApiXWorkspaceRepository(context) }
     val methods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
     val authTypes = listOf("none", "bearer", "basic", "apikey")
-    val bodyTypes = listOf("none", "json", "raw", "form")
+    val bodyTypes = listOf("none", "json", "raw", "form", "multipart")
 
     var requestMode by remember { mutableStateOf("rest") }
     var graphQlQuery by remember { mutableStateOf("query {\n  __typename\n}") }
     var graphQlVariables by remember { mutableStateOf("{}") }
     var graphQlOperationName by remember { mutableStateOf("") }
+    var multipartFiles by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    var multipartFieldName by remember { mutableStateOf("file") }
     var curlInput by remember { mutableStateOf("") }
     var method by remember { mutableStateOf("GET") }
     var methodMenuOpen by remember { mutableStateOf(false) }
@@ -167,6 +171,13 @@ private fun ApiXScreen(
         }
     }
 
+    val multipartFilePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments()
+    ) { selected ->
+        multipartFiles = selected
+        response = "${selected.size} فایل برای ارسال انتخاب شد."
+    }
+
     var environmentVariables by remember {
         mutableStateOf(
             environments.firstOrNull { it.isActive }?.variablesJson?.let { json ->
@@ -179,6 +190,11 @@ private fun ApiXScreen(
             } ?: ""
         )
     }
+
+    fun fileDisplayName(uri: Uri): String =
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        } ?: uri.lastPathSegment ?: "upload.bin"
 
     fun keyValues(source: String, separator: Char): List<HttpKeyValue> =
         source.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.map { line ->
@@ -237,6 +253,7 @@ private fun ApiXScreen(
         }
         body = saved.body
         bodyType = saved.bodyType
+        multipartFiles = emptyList()
         requestMode = "rest"
         if (saved.bodyType == "json") {
             runCatching {
@@ -542,8 +559,28 @@ private fun ApiXScreen(
         if (bodyType != "none") {
             OutlinedTextField(
                 value = body, onValueChange = { body = it }, modifier = Modifier.fillMaxWidth(),
-                minLines = 4, label = { Text(if (bodyType == "form") "Form · هر خط key=value" else "Body") }
+                minLines = 4,
+                label = { Text(if (bodyType == "form" || bodyType == "multipart") "Form fields · هر خط key=value" else "Body") }
             )
+        }
+        if (bodyType == "multipart") {
+            OutlinedTextField(
+                value = multipartFieldName, onValueChange = { multipartFieldName = it },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text("نام فیلد فایل") }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { multipartFilePicker.launch(arrayOf("*/*")) }, modifier = Modifier.weight(1f)) {
+                    Text("انتخاب فایل‌ها")
+                }
+                OutlinedButton(onClick = { multipartFiles = emptyList() }, enabled = multipartFiles.isNotEmpty()) {
+                    Text("پاک‌کردن")
+                }
+            }
+            multipartFiles.forEach { uri ->
+                Text(fileDisplayName(uri), style = MaterialTheme.typography.bodySmall)
+            }
+            Text("فایل‌ها پس از بارگذاری مجدد درخواست باید دوباره انتخاب شوند.", style = MaterialTheme.typography.bodySmall)
         }
 
         }
@@ -567,7 +604,18 @@ private fun ApiXScreen(
                         authPassword = resolveVariables(authPassword, variables),
                         apiKeyName = resolveVariables(apiKeyName, variables),
                         apiKeyValue = resolveVariables(apiKeyValue, variables),
-                        apiKeyIn = apiKeyIn
+                        apiKeyIn = apiKeyIn,
+                        files = if (bodyType == "multipart") multipartFiles.map { uri ->
+                            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                                ?: error("فایل ${fileDisplayName(uri)} قابل خواندن نیست.")
+                            require(bytes.size <= 20 * 1024 * 1024) { "حجم هر فایل نباید بیشتر از ۲۰ مگابایت باشد." }
+                            HttpMultipartFile(
+                                fieldName = multipartFieldName,
+                                fileName = fileDisplayName(uri),
+                                contentType = context.contentResolver.getType(uri) ?: "application/octet-stream",
+                                bytes = bytes
+                            )
+                        } else emptyList()
                     )
                 }
                 resultSpec.onSuccess { spec ->
