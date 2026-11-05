@@ -50,7 +50,9 @@ data class HttpResponseSnapshot(
 }
 
 class HttpRequestEngine(
+    context: Context,
     private val client: OkHttpClient = OkHttpClient.Builder()
+        .cookieJar(PersistentCookieJar(context))
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
