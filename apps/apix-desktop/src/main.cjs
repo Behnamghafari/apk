@@ -6,7 +6,7 @@ const { performance } = require('node:perf_hooks');
 const Database = require('better-sqlite3');
 const { WebSocket } = require('ws');
 
-let win, db, mockServer;
+let win, db, mockServer, pendingSqliteRestorePath=null;
 const sockets = new Map();
 const MAX_RESPONSE = 5 * 1024 * 1024;
 
@@ -60,7 +60,7 @@ ipcMain.on('apix:sync', (event, action, ...args) => {
     else if (action === 'setStorageValue') {
       const [key,value] = args;
       if (typeof key === 'string' && key.startsWith('bt_') && key.length <= 160 && String(value).length <= 8*1024*1024)
-        db.prepare('INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, JSON.stringify(value));
+        db.prepare('INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, String(value));
       event.returnValue = true;
     } else if (action === 'getCookies') event.returnValue = JSON.stringify(db.prepare('SELECT * FROM cookies').all());
     else if (action === 'mockServerStatus') event.returnValue = !!mockServer && mockServer.listening;
@@ -79,7 +79,7 @@ ipcMain.on('apix:sync', (event, action, ...args) => {
     else if (action === 'deleteCookie') { db.prepare('DELETE FROM cookies WHERE name=? AND domain=? AND path=?').run(...args);event.returnValue=true; }
     else if (action === 'clearCookies') { db.prepare('DELETE FROM cookies').run();event.returnValue=true; }
     else if (action === 'restoreSqliteBackup') {
-      const selected=dialog.showOpenDialogSync(win,{properties:['openFile'],filters:[{name:'SQLite backup',extensions:['sqlite','db']}]});
+      const selected=pendingSqliteRestorePath ? [pendingSqliteRestorePath] : dialog.showOpenDialogSync(win,{properties:['openFile'],filters:[{name:'SQLite backup',extensions:['sqlite','db']}]});
       if(!selected){event.returnValue=JSON.stringify({ok:false,error:'Restore cancelled'});}
       else {
         const source=new Database(selected[0],{readonly:true,fileMustExist:true});
@@ -89,7 +89,7 @@ ipcMain.on('apix:sync', (event, action, ...args) => {
           const folders=Array.isArray(map.get('bt_folders'))?map.get('bt_folders').length:0;
           const collections=Array.isArray(map.get('bt_collections'))?map.get('bt_collections').length:0;
           const tx=db.transaction(()=>{db.prepare('DELETE FROM kv').run();const put=db.prepare('INSERT INTO kv(key,value) VALUES(?,?)');for(const row of rows)put.run(row.key,row.value);});
-          tx();event.returnValue=JSON.stringify({ok:true,count:rows.length,folders,collections});
+          tx();pendingSqliteRestorePath=null;event.returnValue=JSON.stringify({ok:true,count:rows.length,folders,collections});
         } finally { source.close(); }
       }
     }
@@ -135,6 +135,7 @@ ipcMain.handle('apix:action', async (_event, action, ...args) => {
   if (action === 'chooseSqliteBackupFile') {
     const res=await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'SQLite backup',extensions:['sqlite','db']}]});
     if (!res.canceled) {
+      pendingSqliteRestorePath=res.filePaths[0];
       const source=new Database(res.filePaths[0],{readonly:true,fileMustExist:true});
       try { const rows=source.prepare('SELECT key,value FROM kv').all();const map=new Map(rows.map(r=>[r.key,JSON.parse(r.value)]));emit('onSqliteBackupSelected',JSON.stringify({count:rows.length,folders:Array.isArray(map.get('bt_folders'))?map.get('bt_folders').length:0,collections:Array.isArray(map.get('bt_collections'))?map.get('bt_collections').length:0})); }
       finally { source.close(); }
@@ -165,7 +166,7 @@ ipcMain.handle('apix:action', async (_event, action, ...args) => {
   if (action === 'runLoadTest') { const result=await loadTest(args[0]); emit('onLoadTestResult',JSON.stringify(result)); return true; }
   if (action === 'sendUploadRequest') {
     const d=JSON.parse(args[0]);const form=new FormData();const field=d.fileField||'file';
-    for(const file of d.files||[]){const bytes=fs.readFileSync(file.path);form.append(field,new Blob([bytes]),file.name||path.basename(file.path));}
+    for(const file of d.files||[]){const bytes=fs.readFileSync(file.path);form.append(file.field||field,new Blob([bytes]),file.name||path.basename(file.path));}
     for(const item of d.fields||[])if(item.enabled!==false&&item.key)form.append(item.key,item.value||'');
     const headers={};for(const h of d.headers||[])if(h.enabled!==false&&h.key)headers[h.key]=h.value||'';
     if(d.authType==='bearer'&&d.bearerToken)headers.Authorization='Bearer '+d.bearerToken;
