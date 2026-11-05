@@ -909,17 +909,17 @@ private fun ApiXBrandHeader(environment: String, requestCount: Int, historyCount
                 color = Color(0xFFB7C9DA), style = MaterialTheme.typography.bodySmall)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ApiXHeaderMetric("ENVIRONMENT", environment.ifBlank { "بدون محیط" })
-            ApiXHeaderMetric("SAVED", requestCount.toString())
-            ApiXHeaderMetric("HISTORY", historyCount.toString())
+            ApiXHeaderMetric("ENVIRONMENT", environment.ifBlank { "بدون محیط" }, Modifier.weight(1f))
+            ApiXHeaderMetric("SAVED", requestCount.toString(), Modifier.weight(1f))
+            ApiXHeaderMetric("HISTORY", historyCount.toString(), Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun ApiXHeaderMetric(label: String, value: String) {
+private fun ApiXHeaderMetric(label: String, value: String, modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+        modifier = modifier.clip(RoundedCornerShape(14.dp))
             .background(Color(0x33202F4A)).padding(horizontal = 10.dp, vertical = 9.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
