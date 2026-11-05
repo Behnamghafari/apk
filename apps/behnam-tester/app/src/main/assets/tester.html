@@ -770,9 +770,8 @@ async function confirmFullBackupRestore(){
   if(pendingSqliteRestoreInfo){
    const result=JSON.parse(BehnamNative.restoreSqliteBackup()||'{}');
    if(!result.ok)throw Error(result.error||'بازیابی فایل SQLite انجام نشد');
-   if(!Array.isArray(result.snapshot))throw Error('پاسخ بازیابی پایگاه داده معتبر نیست');
-   storeCache.clear();result.snapshot.forEach(row=>{if(row&&typeof row.key==='string')storeCache.set(row.key,row.value)});
-   folders=Number(result.folders)||0;collections=Number(result.collections)||0;count=Number(result.count)||result.snapshot.length;
+   storeCache.clear();
+   folders=Number(result.folders)||0;collections=Number(result.collections)||0;count=Number(result.count)||0;
   }else if(Array.isArray(pendingFullBackupRecords)){
    const records=pendingFullBackupRecords.slice(),expected=new Map(records.map(x=>[x.key,x.value]));
    count=BehnamNative.replaceStorageSnapshot(JSON.stringify(records));
