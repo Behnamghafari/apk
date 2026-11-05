@@ -12,8 +12,8 @@ android {
         applicationId = "com.behnamghafari.tester"
         minSdk = 23
         targetSdk = 35
-        versionCode = 38
-        versionName = "1.22.0"
+        versionCode = 39
+        versionName = "1.22.1"
     }
     signingConfigs {
         create("stableDebug") {
@@ -22,6 +22,15 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        create("production") {
+            val keystorePath = System.getenv("ANDROID_KEYSTORE_FILE")
+            if (!keystorePath.isNullOrBlank()) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -29,6 +38,9 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = false
+            if (!System.getenv("ANDROID_KEYSTORE_FILE").isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("production")
+            }
         }
     }
     compileOptions {
