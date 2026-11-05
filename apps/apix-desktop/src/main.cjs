@@ -8,6 +8,7 @@ const { WebSocket } = require('ws');
 
 let win, db, mockServer, pendingSqliteRestorePath=null;
 const sockets = new Map();
+const socketPings = new Map();
 const MAX_RESPONSE = 5 * 1024 * 1024;
 
 function emit(name, payload) {
@@ -68,7 +69,7 @@ ipcMain.on('apix:sync', (event, action, ...args) => {
     else if (action === 'mockServerStatus') event.returnValue = !!mockServer && mockServer.listening;
     else if (action === 'getAppVersion') event.returnValue = app.getVersion();
     else if (action === 'wsSend') { const ws=sockets.get(args[0]); if(ws && ws.readyState===WebSocket.OPEN){ws.send(args[1]);event.returnValue=true;}else event.returnValue=false; }
-    else if (action === 'wsClose') { const ws=sockets.get(args[0]); if(ws)ws.close(args[1]||1000,args[2]||'Closed');sockets.delete(args[0]);event.returnValue=true; }
+    else if (action === 'wsClose') { const ws=sockets.get(args[0]);if(ws)ws.close(args[1]||1000,args[2]||'Closed');const timer=socketPings.get(args[0]);if(timer)clearInterval(timer);socketPings.delete(args[0]);sockets.delete(args[0]);event.returnValue=true; }
     else if (action === 'startMockServer') event.returnValue = startMockServer(args[0]);
     else if (action === 'stopMockServer') { if(mockServer)mockServer.close();mockServer=null;event.returnValue=true; }
     else if (action === 'addCookie') {
@@ -214,15 +215,22 @@ async function sendRequest(raw) {
 }
 function connectWs(raw) {
   const d=JSON.parse(raw), id=String(d.id||''); if(!id) throw new Error('Connection id is required');
-  const headers={}; for(const h of d.headers||[]) if(h && h.enabled!==false && h.key) headers[h.key]=h.value||'';
-  const ws=new WebSocket(d.url,{headers,perMessageDeflate:false,handshakeTimeout:30000});
+  const parsed=new URL(d.url);if(!['ws:','wss:'].includes(parsed.protocol))throw new Error('Only ws:// and wss:// are supported');
+  if((d.headers||[]).length>40)throw new Error('Maximum 40 headers allowed');
+  const blocked=new Set(['host','connection','upgrade','content-length','transfer-encoding']);
+  const headers={};for(const h of d.headers||[])if(h&&h.enabled!==false&&h.key){const name=String(h.key).trim();if(blocked.has(name.toLowerCase())||name.toLowerCase().startsWith('sec-websocket-'))throw new Error('Header is managed by WebSocket protocol: '+name);headers[name]=h.value||'';}
+  const old=sockets.get(id);if(old)old.close(1000,'Replaced');
+  const oldTimer=socketPings.get(id);if(oldTimer)clearInterval(oldTimer);
+  const ws=new WebSocket(parsed.href,{headers,perMessageDeflate:false,handshakeTimeout:30000});
   sockets.set(id,ws);
+  const pingSeconds=Math.min(120,Math.max(0,Number(d.pingInterval??25)));
+  if(pingSeconds>0)socketPings.set(id,setInterval(()=>{if(ws.readyState===WebSocket.OPEN)try{ws.ping();}catch{}},pingSeconds*1000));
   const event=(name,extra={})=>emit('onWebSocketEvent',JSON.stringify({id,event:name,...extra}));
   event('connecting',{url:d.url});
   ws.on('open',()=>event('open'));
   ws.on('message',(data,isBinary)=>event('message',{data:isBinary?'[binary message]':data.toString(),binary:isBinary}));
   ws.on('error',e=>event('error',{error:e.message}));
-  ws.on('close',(code,reason)=>{event('closed',{code,reason:reason.toString()});sockets.delete(id);});
+  ws.on('close',(code,reason)=>{event('closed',{code,reason:reason.toString()});const timer=socketPings.get(id);if(timer)clearInterval(timer);socketPings.delete(id);sockets.delete(id);});
   return true;
 }
 async function securityAudit(raw) {
