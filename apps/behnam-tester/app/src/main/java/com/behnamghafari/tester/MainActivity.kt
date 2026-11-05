@@ -565,6 +565,18 @@ class MainActivity : Activity() {
             cookieJar.deleteCookie(name, domain, path)
         @JavascriptInterface fun clearCookies() { cookieJar.clear() }
 
+        @JavascriptInterface fun getAppVersion(): String = BuildConfig.VERSION_NAME
+
+        @JavascriptInterface fun openPrivacyPolicy() {
+            runOnUiThread {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Behnamghafari/apk/blob/main/apps/behnam-tester/PRIVACY.md")))
+                } catch (_: Exception) {
+                    Toast.makeText(this@MainActivity, "مرورگر برای نمایش سیاست حریم خصوصی در دسترس نیست", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
         @JavascriptInterface fun openTelegram() {
             runOnUiThread {
                 val profileUrl = Uri.parse("https://t.me/behnamghafari")
