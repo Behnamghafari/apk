@@ -12,10 +12,11 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 - [ ] **HTTP request builder:** methods, URL, query parameters, headers, enabled/disabled rows, request body modes (none, JSON, raw, URL-encoded form, multipart upload), request settings.
 - [ ] **Authorization:** none, Bearer, Basic, API Key; environment-variable interpolation.
 - [ ] **Scripting:** pre-request scripts, post-response scripts, script error reporting, assertions and assertion builder.
-- [x] **Environments (basic):** create/update environments, activate/switch environment, persist key/value variables, and interpolate `{{variable}}` in URL, query parameters, headers, body, and auth fields.\n- [ ] **Environments (remaining):** global variables, duplicate/delete, secret encryption, import/export.
+- [x] **Environments (basic):** create/update environments, activate/switch environment, persist key/value variables, and interpolate `{{variable}}` in URL, query parameters, headers, body, and auth fields.
+- [~] **Environments (remaining):** secrets and request payloads are now encrypted at rest with Android Keystore-backed AES-GCM, including transparent migration of existing plaintext records. Global variables, duplicate/delete, and import/export remain pending.
 - [ ] **Cookies:** managed cookie jar, add/delete/clear, cookie integration with requests.
 - [~] **Collections and folders:** save/update requests, basic folder navigation, Postman Collection v2.1 import/export with nested folder preservation. Nested-folder management, rename/delete, move requests, and sample data remain pending.
-- [ ] **History:** request history, restore, delete, clear.
+- [~] **History:** request history is persisted; history URLs are encrypted at rest. Restore, delete individual entries, and clear UI remain pending.
 - [ ] **Response inspector:** status, timing, headers, body formatting, syntax highlighting, response search, copy/download, HTML preview, response diff.
 - [~] **GraphQL:** native query/mutation mode, operation name, JSON variables, environment interpolation, and saving/restoring GraphQL requests are implemented. Formatting, validation, schema introspection and documentation remain pending.
 - [ ] **WebSocket:** connect/disconnect, headers, ping, keepalive, auto-reconnect, saved connections, message history and export.
@@ -26,9 +27,21 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 - [ ] **API utilities:** code generation, JWT decoder, Base64URL decoder, JSON body format/validation, JSON Schema editor and validator.
 - [ ] **Developer tools:** mock API server, load testing, security audit.
 - [ ] **Monitoring:** saved endpoint monitors, manual checks, enable/disable, history and scheduled monitoring.
+- [~] **Local data security:** AES-GCM encryption backed by Android Keystore protects saved request URLs, headers, query parameters, bodies, auth configs, environment variables, and history URLs. Legacy plaintext records are migrated when read.
 - [ ] **Storage migration:** read and migrate existing ApiX local records where technically possible, with explicit backup and no destructive overwrite.
 
-## Implemented in the current Native increment\n\n- Postman Collection v2.1 JSON import through Android document picker; nested folders and requests are imported into the local workspace with new IDs (existing records are not overwritten).\n- Postman Collection v2.1 JSON export of the complete saved workspace, including nested folders.\n- cURL command import for common URL, method, header, body, Basic Auth, and GET-with-data options; parsing is local and never executes a shell command.\n- GraphQL request mode with query/mutation, operation name, JSON variables, environment-variable interpolation, and GraphQL request save/restore.\n- CI debug APK build verified successfully for commit `c08266c945adcf497fee090694b8c3a5f13ee596`.\n\nKnown limits in this increment: Postman file-based form-data entries are not imported as local files; advanced cURL flags and cURL export are not yet supported.\n\n## Delivery phases
+## Implemented in the current Native increment
+
+- Postman Collection v2.1 JSON import through Android document picker; nested folders and requests are imported into the local workspace with new IDs (existing records are not overwritten).
+- Postman Collection v2.1 JSON export of the complete saved workspace, including nested folders.
+- cURL command import for common URL, method, header, body, Basic Auth, and GET-with-data options; parsing is local and never executes a shell command.
+- GraphQL request mode with query/mutation, operation name, JSON variables, environment-variable interpolation, and GraphQL request save/restore.
+- AES-GCM at-rest encryption for saved request content, auth credentials, environment variables, and history URLs using an Android Keystore key; legacy plaintext values are migrated on read.
+- CI debug APK build verified successfully for commit `c08266c945adcf497fee090694b8c3a5f13ee596`.
+
+Known limits in this increment: Postman file-based form-data entries are not imported as local files; advanced cURL flags and cURL export are not yet supported.
+
+## Delivery phases
 
 1. **Foundation:** navigation, design system, persistence/data models, request workspace, robust HTTP engine, query/header/body/auth support. Basic environment editor and variable interpolation are implemented; encrypted secret storage remains pending.
 2. **Core workflow:** environments, variables, cookies, collections, nested folders, history, import/export and workspace restoration.
