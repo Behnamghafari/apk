@@ -156,6 +156,15 @@ class MainActivity : Activity() {
                 }
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
+            // Verify the committed snapshot inside the native layer instead of
+            // making a second synchronous JavaScript-bridge read from WebView.
+            val actual = HashMap<String, String>()
+            db.rawQuery("SELECT key, value FROM kv", null).use { cursor ->
+                while (cursor.moveToNext()) actual[cursor.getString(0)] = cursor.getString(1)
+            }
+            require(actual.size == prepared.size && prepared.all { (key, value) -> actual[key] == value }) {
+                "بازیابی در پایگاه داده تأیید نشد"
+            }
             return prepared.size
         }
 
