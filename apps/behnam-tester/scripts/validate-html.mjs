@@ -42,6 +42,8 @@ assert(html.includes("r.id!==$('pendingId').value"), 'Stale response protection 
 assert(html.includes('if(r.id!==scenarioRun.currentRequestId)return'), 'Scenario response correlation is missing');
 assert(html.includes('run.currentRequestId=req.id'), 'Scenario request ID tracking is missing');
 assert(html.includes("درخواست قبلی هنوز در حال اجراست"), 'Overlapping request guard is missing');
+assert(html.includes('savedResponse.body.length>128*1024'), 'Stored response history must be bounded');
+assert(html.includes('function addHistory(req,res)'), 'Request history storage function is missing');
 assert(html.includes("x.req?.mode!=='websocket'"), 'WebSocket requests must be excluded from REST collection runs');
 assert(html.includes("req:{method,url,allowScripts:true,params:[]"), 'Built-in sample assertions must remain enabled');
 assert(html.includes("wsHistory=wsHistory.slice(0,200)"), 'WebSocket history count must be bounded');
