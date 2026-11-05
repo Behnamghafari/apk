@@ -187,6 +187,9 @@ class ApiXDatabase(context: Context) :
     fun updateHistoryUrl(id: String, url: String): Int =
         writableDatabase.update("request_history", ContentValues().apply { put("url", url) }, "id = ?", arrayOf(id))
 
+    fun deleteHistoryEntry(id: String): Int =
+        writableDatabase.delete("request_history", "id = ?", arrayOf(id))
+
     fun clearHistory() {
         writableDatabase.delete("request_history", null, null)
     }
