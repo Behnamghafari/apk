@@ -31,6 +31,10 @@ class MainActivity : Activity() {
     private lateinit var web: WebView
     private val maxResponseBytes = 5 * 1024 * 1024
     private val uploadRequestCode = 4812
+    private val backupSaveRequestCode = 4813
+    private val backupRestoreRequestCode = 4814
+    @Volatile private var pendingBackupJson: String? = null
+    @Volatile private var pendingBackupName: String = "apix-backup.json"
     private lateinit var cookieJar: PersistentCookieJar
     private lateinit var client: OkHttpClient
     @Volatile private var mockServer: ServerSocket? = null
@@ -544,6 +548,45 @@ class MainActivity : Activity() {
             }
         }
 
+        @JavascriptInterface fun saveBackupFile(raw: String, fileName: String) {
+            require(raw.length <= 32 * 1024 * 1024) { "Backup file is too large" }
+            runOnUiThread {
+                try {
+                    pendingBackupJson = raw
+                    pendingBackupName = fileName.substringAfterLast('/').take(120).ifBlank { "apix-backup.json" }
+                    val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_TITLE, pendingBackupName)
+                        if (android.os.Build.VERSION.SDK_INT >= 26) {
+                            putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI,
+                                android.provider.DocumentsContract.buildDocumentUri(
+                                    "com.android.externalstorage.documents", "primary:Download"
+                                ))
+                        }
+                    }
+                    startActivityForResult(intent, backupSaveRequestCode)
+                } catch (e: Exception) {
+                    pendingBackupJson = null
+                    Toast.makeText(this@MainActivity, "باز کردن محل ذخیره بکاپ ممکن نیست: " + e.message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        @JavascriptInterface fun chooseBackupFile() {
+            runOnUiThread {
+                try {
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/json", "application/octet-stream"))
+                    }
+                    startActivityForResult(intent, backupRestoreRequestCode)
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "باز کردن انتخاب‌گر فایل ممکن نیست: " + e.message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         @JavascriptInterface fun chooseUploadFiles() {
             runOnUiThread {
                 try {
@@ -699,6 +742,50 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Android")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == backupSaveRequestCode) {
+            val payload = pendingBackupJson
+            pendingBackupJson = null
+            if (resultCode == RESULT_OK && data?.data != null && payload != null) {
+                try {
+                    val uri = data.data!!
+                    contentResolver.openOutputStream(uri, "wt")?.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                        ?: throw IllegalStateException("Cannot open destination")
+                    val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) else pendingBackupName
+                    } ?: pendingBackupName
+                    val result = JSONObject().put("ok", true).put("name", name).put("uri", uri.toString())
+                    if (::web.isInitialized) web.evaluateJavascript(
+                        "window.onBackupSaved && window.onBackupSaved(" + JSONObject.quote(result.toString()) + ")", null
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(this, "ذخیره بکاپ ناموفق بود: " + e.message, Toast.LENGTH_LONG).show()
+                    if (::web.isInitialized) web.evaluateJavascript(
+                        "window.onBackupSaved && window.onBackupSaved(" + JSONObject.quote(JSONObject().put("ok", false).toString()) + ")", null
+                    )
+                }
+            } else {
+                Toast.makeText(this, "ذخیره بکاپ لغو شد", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        if (requestCode == backupRestoreRequestCode) {
+            if (resultCode == RESULT_OK && data?.data != null) {
+                try {
+                    val uri = data.data!!
+                    val raw = contentResolver.openInputStream(uri)?.use { input ->
+                        val bytes = input.readBytes()
+                        require(bytes.size <= 32 * 1024 * 1024) { "Backup file is larger than 32 MB" }
+                        String(bytes, Charsets.UTF_8)
+                    } ?: throw IllegalStateException("Cannot read backup file")
+                    if (::web.isInitialized) web.evaluateJavascript(
+                        "window.onBackupFileSelected && window.onBackupFileSelected(" + JSONObject.quote(raw) + ")", null
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(this, "خواندن فایل بکاپ ناموفق بود: " + e.message, Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
         if (requestCode != uploadRequestCode) return
         val selected = mutableListOf<Uri>()
         if (resultCode == RESULT_OK && data != null) {
