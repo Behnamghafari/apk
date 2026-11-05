@@ -22,7 +22,14 @@ for (const [index, source] of scripts.entries()) {
 
 const ids = [...html.matchAll(/\bid=["']([^"']+)["']/g)].map((m) => m[1]);
 const duplicates = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
+const unlabeledInputs = [...html.matchAll(/<input\\b[^>]*>/gi)].filter((m) => !/\\b(?:aria-label|id)=/.test(m[0]));
 assert(duplicates.length === 0, 'Duplicate HTML IDs: ' + duplicates.join(', '));
+
+assert(unlabeledInputs.length === 0, 'Inputs missing accessible labels: ' + unlabeledInputs.length);
+assert(html.includes('id="appVersion"'), 'Dynamic version label is missing from About');
+assert(html.includes('BehnamNative.openPrivacyPolicy()'), 'Privacy policy link is missing from About');
+assert(kotlin.includes('BuildConfig.VERSION_NAME'), 'Native app version bridge is missing');
+assert(kotlin.includes('apps/behnam-tester/PRIVACY.md') || kotlin.includes('/PRIVACY.md'), 'Privacy policy URL is missing');
 assert(!/user-scalable\s*=\s*no/i.test(html), 'Viewport zoom must remain available for accessibility');
 assert(!/<(?:script|link|img)\b[^>]+(?:src|href)=["']https?:\/\//i.test(html), 'External runtime assets are not allowed');
 assert(html.includes('id="allowScripts"'), 'Explicit script permission control is missing');
