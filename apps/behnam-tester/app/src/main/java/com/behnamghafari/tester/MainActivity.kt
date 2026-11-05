@@ -164,19 +164,22 @@ class MainActivity : Activity() {
                             }
                         }
                     }
-                    latch.await(180, TimeUnit.SECONDS)
+                    val completedInTime = latch.await(180, TimeUnit.SECONDS)
                     pool.shutdownNow()
                     val elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started).coerceAtLeast(1)
                     val sorted = durations.toList().sorted()
                     val success = statuses.count { it in 200..399 }
-                    val failed = total - statuses.size
+                    val completed = durations.size
+                    val networkErrors = errors.size
+                    val notCompleted = (total - completed).coerceAtLeast(0)
                     val avg = if (sorted.isEmpty()) 0L else sorted.average().toLong()
-                    result.put("total", total).put("completed", durations.size).put("success", success)
-                        .put("httpErrors", statuses.size - success).put("networkErrors", failed)
+                    result.put("total", total).put("completed", completed).put("success", success)
+                        .put("httpErrors", statuses.size - success).put("networkErrors", networkErrors)
+                        .put("notCompleted", notCompleted).put("timedOut", !completedInTime)
                         .put("avg", avg).put("min", sorted.firstOrNull() ?: 0L)
                         .put("max", sorted.lastOrNull() ?: 0L)
                         .put("p95", if (sorted.isEmpty()) 0L else sorted[((sorted.size - 1) * 0.95).toInt()])
-                        .put("elapsed", elapsed).put("rps", statuses.size * 1000.0 / elapsed)
+                        .put("elapsed", elapsed).put("rps", completed * 1000.0 / elapsed)
                         .put("statuses", JSONArray(statuses.toList()))
                         .put("errors", JSONArray(errors.toList().take(10)))
                 } catch (e: Exception) { result.put("error", e.message ?: "Load test failed") }
@@ -414,7 +417,11 @@ class MainActivity : Activity() {
                         deliverWebSocket(JSONObject().put("id", id).put("event", "open").put("protocol", response.header("Sec-WebSocket-Protocol", "")))
                     }
                     override fun onMessage(webSocket: okhttp3.WebSocket, text: String) {
-                        deliverWebSocket(JSONObject().put("id", id).put("event", "message").put("message", text))
+                        val maxChars = 32 * 1024
+                        val clipped = text.length > maxChars
+                        deliverWebSocket(JSONObject().put("id", id).put("event", "message")
+                            .put("message", if (clipped) text.take(maxChars) else text)
+                            .put("truncated", clipped).put("originalChars", text.length))
                     }
                     override fun onMessage(webSocket: okhttp3.WebSocket, bytes: okio.ByteString) {
                         deliverWebSocket(JSONObject().put("id", id).put("event", "message").put("message", "[Binary message · ${bytes.size} bytes]").put("binary", true))
