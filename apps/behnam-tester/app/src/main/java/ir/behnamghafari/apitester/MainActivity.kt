@@ -282,16 +282,20 @@ class MainActivity : Activity() {
                     val url = input.getString("url").trim()
                     val origin = input.optString("origin", "https://apix.invalid").trim()
                     val requestedMethod = input.optString("method", "PUT").uppercase()
+                    val tokenA = input.optString("tokenA").trim()
+                    val tokenB = input.optString("tokenB").trim()
                     require(url.startsWith("http://") || url.startsWith("https://")) { "URL معتبر نیست" }
                     require(origin.startsWith("http://") || origin.startsWith("https://")) { "Origin معتبر نیست" }
                     require(requestedMethod in setOf("POST", "PUT", "PATCH", "DELETE")) { "متد آزمایشی مجاز نیست" }
+                    require(tokenA.isEmpty() == tokenB.isEmpty()) { "برای مقایسه دسترسی هر دو توکن را وارد کن" }
                     val checks = JSONArray()
                     fun check(name: String, ok: Boolean, detail: String, severity: String = "REVIEW") {
                         checks.put(JSONObject().put("name", name).put("ok", ok).put("detail", detail).put("severity", severity))
                     }
                     var status = 0
                     var finalUrl = url
-                    client.newCall(Request.Builder().url(url).get().build()).execute().use { response ->
+                    client.newBuilder().cookieJar(CookieJar.NO_COOKIES).followRedirects(false).followSslRedirects(false)
+                        .callTimeout(15, TimeUnit.SECONDS).build().newCall(Request.Builder().url(url).get().build()).execute().use { response ->
                         val headers = response.headers
                         status = response.code
                         finalUrl = response.request.url.toString()
@@ -313,13 +317,11 @@ class MainActivity : Activity() {
                         check("Cookie Secure flag", cookieHeaders.isEmpty() || cookiesSecure, if (cookieHeaders.isEmpty()) "کوکی تنظیم نشد" else if (cookiesSecure) "تمام کوکی‌های پاسخ Secure هستند" else "حداقل یک کوکی فاقد Secure است", "MEDIUM")
                         check("Cookie HttpOnly flag", cookieHeaders.isEmpty() || cookiesHttpOnly, if (cookieHeaders.isEmpty()) "کوکی تنظیم نشد" else if (cookiesHttpOnly) "تمام کوکی‌های پاسخ HttpOnly هستند" else "حداقل یک کوکی فاقد HttpOnly است", "MEDIUM")
                     }
-                    val preflight = Request.Builder().url(url)
-                        .method("OPTIONS", null)
-                        .header("Origin", origin)
-                        .header("Access-Control-Request-Method", requestedMethod)
-                        .header("Access-Control-Request-Headers", "authorization,content-type")
-                        .build()
-                    client.newCall(preflight).execute().use { response ->
+                    val preflight = Request.Builder().url(url).method("OPTIONS", null)
+                        .header("Origin", origin).header("Access-Control-Request-Method", requestedMethod)
+                        .header("Access-Control-Request-Headers", "authorization,content-type").build()
+                    client.newBuilder().cookieJar(CookieJar.NO_COOKIES).followRedirects(false).followSslRedirects(false)
+                        .callTimeout(15, TimeUnit.SECONDS).build().newCall(preflight).execute().use { response ->
                         val h = response.headers
                         val allowOrigin = h["Access-Control-Allow-Origin"]
                         val originAllowed = allowOrigin == "*" || allowOrigin == origin
@@ -335,6 +337,29 @@ class MainActivity : Activity() {
                         val allowed = (h["Allow"] ?: allowMethods).split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }
                         check("Dangerous HTTP methods", "TRACE" !in allowed && "TRACK" !in allowed, if (allowed.isEmpty()) "فهرست متدها از پاسخ OPTIONS قابل استخراج نبود" else "متدهای اعلام‌شده: " + allowed.joinToString(", "), "HIGH")
                         check("OPTIONS response", response.code in 200..299 || response.code == 204, "کد پاسخ OPTIONS: ${response.code}", "LOW")
+                    }
+                    if (tokenA.isNotEmpty() && tokenB.isNotEmpty()) {
+                        fun fetchWithToken(token: String): Pair<Int, String> {
+                            val req = Request.Builder().url(url).get().header("Authorization", "Bearer " + token).build()
+                            client.newBuilder().cookieJar(CookieJar.NO_COOKIES).followRedirects(false).followSslRedirects(false)
+                                .callTimeout(15, TimeUnit.SECONDS).build().newCall(req).execute().use { response ->
+                                val body = response.body?.string().orEmpty().take(256 * 1024)
+                                return response.code to body
+                            }
+                        }
+                        val a = fetchWithToken(tokenA)
+                        val b = fetchWithToken(tokenB)
+                        val bDenied = b.first == 401 || b.first == 403
+                        val sameSuccessfulBody = a.first in 200..299 && b.first in 200..299 && a.second == b.second
+                        check("Cross-account access (BOLA/IDOR signal)", bDenied || !sameSuccessfulBody,
+                            when {
+                                bDenied -> "کاربر B با پاسخ ${b.first} رد شد؛ نشانه مثبت کنترل دسترسی"
+                                sameSuccessfulBody -> "هر دو حساب پاسخ موفق و بدنه کاملاً یکسان گرفتند؛ احتمال دسترسی بین‌حسابی را دستی بررسی کن"
+                                b.first in 200..299 -> "کاربر B نیز پاسخ موفق گرفت؛ محتوای دو حساب متفاوت است، مالکیت داده را دستی بررسی کن"
+                                else -> "درخواست A: ${a.first}، درخواست B: ${b.first}"
+                            }, "HIGH")
+                    } else {
+                        check("Cross-account access (BOLA/IDOR signal)", true, "برای این آزمون دو توکن مجزا وارد نشده است؛ بررسی انجام نشد", "INFO")
                     }
                     result.put("status", status).put("finalUrl", finalUrl).put("origin", origin).put("method", requestedMethod)
                         .put("checks", checks)
