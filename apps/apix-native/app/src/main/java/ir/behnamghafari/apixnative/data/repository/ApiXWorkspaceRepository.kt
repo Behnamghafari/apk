@@ -5,11 +5,11 @@ import ir.behnamghafari.apixnative.data.local.ApiXDatabase
 import ir.behnamghafari.apixnative.data.model.ApiEnvironment
 import ir.behnamghafari.apixnative.data.model.RequestFolder
 import ir.behnamghafari.apixnative.data.model.RequestHistoryEntry
-import ir.behnamghafari.apixnative.data.model.SavedRequest
+import ir.behnamghafari.apixnative.data.model.SavedRequest\nimport ir.behnamghafari.apixnative.data.security.SecretVault
 
 /** Small repository boundary between Compose state and the local workspace database. */
 class ApiXWorkspaceRepository(context: Context) {
-    private val database = ApiXDatabase(context)
+    private val database = ApiXDatabase(context)\n    private val vault = SecretVault()
 
     fun saveRequest(request: SavedRequest) = database.saveRequest(request)
     fun savedRequests(folderId: String? = null) = database.getSavedRequests(folderId)
@@ -60,5 +60,27 @@ class ApiXWorkspaceRepository(context: Context) {
 
     fun history(limit: Int = 200) = database.getHistory(limit)
     fun clearHistory() = database.clearHistory()
-    fun close() = database.close()
+
+    private fun protectRequest(request: SavedRequest): SavedRequest = request.copy(
+        url = vault.protect(request.url),
+        headersJson = vault.protect(request.headersJson),
+        paramsJson = vault.protect(request.paramsJson),
+        body = vault.protect(request.body),
+        authConfigJson = vault.protect(request.authConfigJson)
+    )
+
+    private fun revealRequest(stored: SavedRequest): SavedRequest {
+        val values = listOf(stored.url, stored.headersJson, stored.paramsJson, stored.body, stored.authConfigJson)
+        if (values.any { it.isNotBlank() && !vault.isEncrypted(it) }) {
+            database.saveRequest(protectRequest(stored))
+        }
+        return stored.copy(
+            url = vault.reveal(stored.url),
+            headersJson = vault.reveal(stored.headersJson),
+            paramsJson = vault.reveal(stored.paramsJson),
+            body = vault.reveal(stored.body),
+            authConfigJson = vault.reveal(stored.authConfigJson)
+        )
+    }
+\n    fun close() = database.close()
 }
