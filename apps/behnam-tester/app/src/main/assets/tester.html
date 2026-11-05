@@ -903,7 +903,7 @@ function saveWsConnection(){try{const address=interpolate($('url').value.trim())
 function getSavedWsEntries(){
  const profiles=store.get('wsConnections',[]).map(x=>({kind:'profile',id:x.id,name:x.name,item:x}));
  const folders=store.get('folders',[]),collections=store.get('collections',[]);
- const saved=collections.filter(x=>x&&x.req&&(x.req.mode==='websocket'||/^wss?:\\/\\//i.test(x.req.url||''))).map(x=>({kind:'collection',id:x.id,name:x.name||'WebSocket',item:x,folder:folders.find(f=>f.id===x.folderId)}));
+ const saved=collections.filter(x=>x&&x.req&&(x.req.mode==='websocket'||/^wss?:\/\//i.test(x.req.url||''))).map(x=>({kind:'collection',id:x.id,name:x.name||'WebSocket',item:x,folder:folders.find(f=>f.id===x.folderId)}));
  return {profiles,saved};
 }
 function renderWsConnections(){
