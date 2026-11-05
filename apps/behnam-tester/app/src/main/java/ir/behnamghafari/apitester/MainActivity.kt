@@ -430,7 +430,18 @@ class MainActivity : Activity() {
                     }
                     val start = System.currentTimeMillis()
                     val req = builder.method(method, if (method in listOf("GET", "HEAD")) null else requestBody).build()
-                    val requestClient = client.newBuilder().callTimeout(data.optLong("timeout", 60L).coerceIn(5L, 300L), TimeUnit.SECONDS).build()
+                    val isCorsPreflight = data.optBoolean("corsPreflight", false)
+                    val requestClient = client.newBuilder()
+                        .callTimeout(data.optLong("timeout", 60L).coerceIn(5L, 300L), TimeUnit.SECONDS)
+                        .apply {
+                            if (isCorsPreflight) {
+                                cookieJar(CookieJar.NO_COOKIES)
+                                followRedirects(false)
+                                followSslRedirects(false)
+                                retryOnConnectionFailure(false)
+                            }
+                        }
+                        .build()
                     requestClient.newCall(req).execute().use { response ->
                         val responseHeaders = JSONObject()
                         response.headers.names().sorted().forEach { key ->
