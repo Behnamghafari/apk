@@ -248,7 +248,7 @@ async function securityAudit(raw) {
     const cookies=first.headers.getSetCookie?.()||[];
     check('Cookie Secure flag',!cookies.length||cookies.every(x=>/;\s*secure(?:;|$)/i.test(';'+x)),!cookies.length?'کوکی تنظیم نشد':cookies.every(x=>/;\s*secure(?:;|$)/i.test(';'+x))?'تمام کوکی‌های پاسخ Secure هستند':'حداقل یک کوکی فاقد Secure است','MEDIUM');
     check('Cookie HttpOnly flag',!cookies.length||cookies.every(x=>/httponly/i.test(x)),!cookies.length?'کوکی تنظیم نشد':cookies.every(x=>/httponly/i.test(x))?'تمام کوکی‌های پاسخ HttpOnly هستند':'حداقل یک کوکی فاقد HttpOnly است','MEDIUM');
-    const pre=await get(url,{method:'OPTIONS',headers:{Origin:origin.href,'Access-Control-Request-Method':method,'Access-Control-Request-Headers':'authorization,content-type'}});
+    const pre=await get(url,{method:'OPTIONS',headers:{Origin:origin.origin,'Access-Control-Request-Method':method,'Access-Control-Request-Headers':'authorization,content-type'}});
     const ph=Object.fromEntries(pre.headers.entries()),allowOrigin=ph['access-control-allow-origin']||'',allowMethods=ph['access-control-allow-methods']||'',allowHeaders=ph['access-control-allow-headers']||'';
     check('CORS origin policy',allowOrigin==='*'||allowOrigin===origin.href,allowOrigin||'Access-Control-Allow-Origin در پاسخ OPTIONS وجود ندارد','MEDIUM');
     check('CORS requested method',allowMethods.split(',').some(x=>x.trim().toUpperCase()===method||x.trim()==='*'),allowMethods||'Access-Control-Allow-Methods ارسال نشده','MEDIUM');
@@ -275,7 +275,7 @@ async function securityAudit(raw) {
       check('SQL injection (error signal)',true,'نام پارامتر Query تعیین نشده؛ آزمون اجرا نشد','INFO');
       check('Reflected input (XSS indicator)',true,'نام پارامتر Query تعیین نشده؛ آزمون اجرا نشد','INFO');
     }
-    return {status:first.status,finalUrl,origin:origin.href,method,checks,passed:checks.filter(x=>x.ok).length,failed:checks.filter(x=>!x.ok).length};
+    return {status:first.status,finalUrl,origin:origin.origin,method,checks,passed:checks.filter(x=>x.ok).length,failed:checks.filter(x=>!x.ok).length};
   } catch(e) { return {error:e.name==='AbortError'?'Request timed out':e.message}; }
 }
 async function monitorCheck(raw) {
