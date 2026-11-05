@@ -12,7 +12,9 @@ class ApiXWorkspaceRepository(context: Context) {
     private val database = ApiXDatabase(context)
 
     fun saveRequest(request: SavedRequest) = database.saveRequest(request)
-    fun savedRequests(folderId: String? = null) = database.getSavedRequests(folderId)\n    fun allSavedRequests() = database.getAllSavedRequests()\n    fun allFolders() = database.getAllFolders()
+    fun savedRequests(folderId: String? = null) = database.getSavedRequests(folderId)
+    fun allSavedRequests() = database.getAllSavedRequests()
+    fun allFolders() = database.getAllFolders()
     fun deleteRequest(id: String) = database.deleteSavedRequest(id)
 
     fun createFolder(name: String, parentId: String? = null): RequestFolder {
