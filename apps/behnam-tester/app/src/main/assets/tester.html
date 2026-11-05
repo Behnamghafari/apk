@@ -646,8 +646,8 @@ function renderGlobalVars(){if(!$('globalVarsList'))return;const vars=store.get(
 function saveGlobalVars(){const values={};for(const row of $('globalVarsList').querySelectorAll('.env-editor-row')){const key=row.querySelector('.global-var-key').value.trim(),value=row.querySelector('.global-var-value').value;if(!key)continue;if(Object.prototype.hasOwnProperty.call(values,key)){BehnamNative.toast('نام متغیر تکراری است: '+key);return}values[key]=value}store.set('globalVars',values);renderGlobalVars();BehnamNative.toast('متغیرهای سراسری ذخیره شدند')}
 function exportEnvironments(){
  const data={format:'behnam-tester-environments',version:2,exportedAt:new Date().toISOString(),environments:store.get('envs',[]),globalVariables:store.get('globalVars',{})};
- downloadJsonFile('apix-environments-'+new Date().toISOString().slice(0,10)+'.json',data);
- BehnamNative.toast('فایل خروجی محیط‌ها آماده شد');
+ try{BehnamNative.saveBackupFile(JSON.stringify(data,null,2),'apix-environments-'+new Date().toISOString().slice(0,10)+'.json')}
+ catch(e){BehnamNative.toast('ساخت فایل محیط‌ها ناموفق بود: '+(e.message||e))}
 }
 function importEnvironments(){
  const picker=document.createElement('input');picker.type='file';picker.accept='.json,application/json';picker.style.display='none';
@@ -836,9 +836,8 @@ function renderCorsResult(r){
 
 function exportCollections(){
  const data={format:'apix-collections',version:2,exportedAt:new Date().toISOString(),folders:store.get('folders',[]),collections:store.get('collections',[])};
- const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
- a.href=url;a.download='apix-collections-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
- BehnamNative.toast('فایل خروجی مجموعه‌ها آماده شد');
+ try{BehnamNative.saveBackupFile(JSON.stringify(data,null,2),'apix-collections-'+new Date().toISOString().slice(0,10)+'.json')}
+ catch(e){BehnamNative.toast('ساخت فایل مجموعه‌ها ناموفق بود: '+(e.message||e))}
 }
 function importCollections(){
  const picker=document.createElement('input');picker.type='file';picker.accept='.json,application/json';picker.style.display='none';
