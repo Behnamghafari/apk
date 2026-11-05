@@ -90,7 +90,11 @@ private fun ApiXScreen(
     val authTypes = listOf("none", "bearer", "basic", "apikey")
     val bodyTypes = listOf("none", "json", "raw", "form")
 
-    var requestMode by remember { mutableStateOf("rest") }\n    var graphQlQuery by remember { mutableStateOf("query {\\n  __typename\\n}") }\n    var graphQlVariables by remember { mutableStateOf("{}") }\n    var graphQlOperationName by remember { mutableStateOf("") }\n    var curlInput by remember { mutableStateOf("") }
+    var requestMode by remember { mutableStateOf("rest") }
+    var graphQlQuery by remember { mutableStateOf("query {\n  __typename\n}") }
+    var graphQlVariables by remember { mutableStateOf("{}") }
+    var graphQlOperationName by remember { mutableStateOf("") }
+    var curlInput by remember { mutableStateOf("") }
     var method by remember { mutableStateOf("GET") }
     var methodMenuOpen by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("https://httpbin.org/get") }
@@ -457,7 +461,9 @@ private fun ApiXScreen(
             }
         }
 
-        if (requestMode == "rest") {\n        Text("Request Body", style = MaterialTheme.typography.titleSmall)\n        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        if (requestMode == "rest") {
+            Text("Request Body", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             bodyTypes.forEach { type ->
                 OutlinedButton(onClick = { bodyType = type }) {
                     Text(if (bodyType == type) "✓ $type" else type)
@@ -471,18 +477,21 @@ private fun ApiXScreen(
             )
         }
 
-        }\n\n        Button(\n            onClick = {
+        }
+
+        Button(
+            onClick = {
                 loading = true
                 response = "در حال ارسال درخواست..."
                 val resultSpec = runCatching {
                     val variables = activeVariables()
                     HttpRequestSpec(
-                        method = method,
+                        method = if (requestMode == "graphql") "POST" else method,
                         url = resolveVariables(url, variables),
                         queryParams = keyValues(resolveVariables(params, variables), '='),
                         headers = keyValues(resolveVariables(headers, variables), ':'),
-                        body = resolveVariables(body, variables),
-                        bodyType = bodyType,
+                        body = resolveVariables(effectiveBody(), variables),
+                        bodyType = if (requestMode == "graphql") "json" else bodyType,
                         authType = authType,
                         authToken = resolveVariables(authToken, variables),
                         authUsername = resolveVariables(authUsername, variables),
