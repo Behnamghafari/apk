@@ -1,4 +1,5 @@
 name: Build ApiX APK
+run-name: ApiX Android release build
 on:
   push:
     paths:
