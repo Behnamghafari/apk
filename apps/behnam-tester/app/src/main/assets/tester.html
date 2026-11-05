@@ -739,7 +739,7 @@ function renderCorsResult(r){
  const passed=statusOk&&originOk&&methodOk&&headersOk&&credentialsOk;
  const lines=[
   (passed?'نتیجه نهایی: مبدأ و درخواست با تنظیمات فعلی مجاز هستند':'نتیجه نهایی: تنظیمات فعلی پیش‌بررسی را تأیید نمی‌کنند'),
-  'وضعیت پاسخ سرور: '+status+(r.statusText?' · '+r.statusText:'')+' '+(statusOk?'(موفق)':'(ناموفق)'),
+  'وضعیت پاسخ سرور: '+status+' '+(statusOk?'(موفق)':'(ناموفق)'),
   '',
   'بررسی مجوزها:',
   (originOk?'✓':'✗')+' اجازه مبدأ: '+(allowOrigin||'در پاسخ وجود ندارد'),
