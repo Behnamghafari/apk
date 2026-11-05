@@ -36,6 +36,7 @@ function initDb() {
   db = new Database(file);
   db.pragma('journal_mode = WAL');
   db.exec('CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)');
   db.exec('CREATE TABLE IF NOT EXISTS cookies (name TEXT, value TEXT, domain TEXT, path TEXT, expires TEXT, secure INTEGER DEFAULT 0, httpOnly INTEGER DEFAULT 0, PRIMARY KEY(name,domain,path))');
 }
 function makeWindow() {
@@ -55,7 +56,8 @@ app.on('before-quit', () => { try { if (db) db.close(); } catch {} });
 
 ipcMain.on('apix:sync', (event, action, ...args) => {
   try {
-    if (action === 'shouldImportLegacyStorage') event.returnValue = db.prepare('SELECT COUNT(*) AS n FROM kv').get().n === 0;
+    if (action === 'shouldImportLegacyStorage') event.returnValue = db.prepare("SELECT value FROM app_meta WHERE key='legacy_imported'").get()?.value !== '1' && db.prepare('SELECT COUNT(*) AS n FROM kv').get().n === 0;
+    else if (action === 'markLegacyStorageImported') { db.prepare('INSERT OR REPLACE INTO app_meta(key,value) VALUES(?,?)').run('legacy_imported','1');event.returnValue=true; }
     else if (action === 'getStorageSnapshot') event.returnValue = JSON.stringify(db.prepare('SELECT key,value FROM kv').all().map(r => ({key:r.key,value:JSON.parse(r.value)})));
     else if (action === 'setStorageValue') {
       const [key,value] = args;
