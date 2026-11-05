@@ -181,6 +181,59 @@
   .appbar .bar-actions button{padding:5px 5px;font-size:10px}
 }
 
+
+:root[data-theme="light"]{
+ color-scheme:light;
+ --bg:#f4f7fb;--panel:#ffffff;--panel2:#eef2f7;--line:#d8e0eb;
+ --text:#172033;--muted:#64748b;--blue:#2563eb;--green:#059669;
+ --red:#e11d48;--yellow:#b45309;
+}
+:root[data-theme="light"] body{background:var(--bg);color:var(--text)}
+:root[data-theme="light"] .appbar,:root[data-theme="light"] .bottom{background:#fff;border-color:var(--line);box-shadow:0 2px 12px #1720330b}
+:root[data-theme="light"] button,:root[data-theme="light"] input,:root[data-theme="light"] select,:root[data-theme="light"] textarea{background:#fff;color:var(--text);border-color:var(--line)}
+:root[data-theme="light"] button{background:#e8eef8;border-color:#d2dceb}
+:root[data-theme="light"] button.primary,:root[data-theme="light"] .save-request-footer .save-confirm,:root[data-theme="light"] .create-folder-footer .folder-confirm{background:var(--blue);border-color:var(--blue);color:#fff}
+:root[data-theme="light"] button.danger,:root[data-theme="light"] .run-pill.bad,:root[data-theme="light"] .monitor-state.down{background:#fff1f2;border-color:#fecdd3;color:#be123c}
+:root[data-theme="light"] .tabs button.active,:root[data-theme="light"] .bottom button.active{background:#e8efff;border-color:#b8ccfa;color:#1d4ed8;box-shadow:none}
+:root[data-theme="light"] .bodytypes button.active,:root[data-theme="light"] .mode-switch button.active{background:#dce8ff;border-color:#9bb9f5;color:#1d4ed8;box-shadow:none}
+:root[data-theme="light"] .mode-switch,:root[data-theme="light"] .response-tabs,:root[data-theme="light"] .response-search,:root[data-theme="light"] .upload-advanced,:root[data-theme="light"] .monitor-metric,:root[data-theme="light"] .assertion-builder{background:#f0f4f9;border-color:var(--line)}
+:root[data-theme="light"] .response-head,:root[data-theme="light"] .ws-panel,:root[data-theme="light"] .collection-accordion{background:var(--panel);border-color:var(--line)}
+:root[data-theme="light"] .response-tabs button.active,:root[data-theme="light"] .tool-back{background:#e5edfc;color:#1d4ed8}
+:root[data-theme="light"] .notice{background:#eff6ff;color:#1e40af;border-color:#bfdbfe}
+:root[data-theme="light"] .run-pill,:root[data-theme="light"] .monitor-state{background:#eef2f7;color:#475569}
+:root[data-theme="light"] .run-pill.good,:root[data-theme="light"] .monitor-state.up{background:#ecfdf5;color:#047857}
+:root[data-theme="light"] .tool-output,:root[data-theme="light"] .ws-log,:root[data-theme="light"] .graphql-docs,:root[data-theme="light"] .scenario-log{background:#f1f5f9;color:#1e293b;border:1px solid var(--line)}
+:root[data-theme="light"] .modal{background:#0f172a55}
+:root[data-theme="light"] .save-request-modal,:root[data-theme="light"] .create-folder-modal{background:#0f172a55}
+:root[data-theme="light"] .save-request-card,:root[data-theme="light"] .create-folder-card{background:linear-gradient(155deg,#fff,#f5f8fc);border-color:#d8e0eb;box-shadow:0 24px 80px #17203326}
+:root[data-theme="light"] .save-request-head,:root[data-theme="light"] .create-folder-head{border-color:var(--line)}
+:root[data-theme="light"] .save-request-heading small,:root[data-theme="light"] .create-folder-heading small,:root[data-theme="light"] .save-folder-copy small{color:#64748b}
+:root[data-theme="light"] .save-request-label,:root[data-theme="light"] .create-folder-label,:root[data-theme="light"] .save-folder-copy strong{color:#172033}
+:root[data-theme="light"] .save-request-close,:root[data-theme="light"] .create-folder-close,:root[data-theme="light"] .save-request-footer .save-cancel,:root[data-theme="light"] .create-folder-footer .folder-cancel{background:#f1f5f9;border-color:#d8e0eb;color:#334155}
+:root[data-theme="light"] .save-request-input,:root[data-theme="light"] .create-folder-input{background:#fff;color:#172033;border-color:#cbd5e1}
+:root[data-theme="light"] .save-folder-option,:root[data-theme="light"] .create-folder-parent{background:#f8fafc;border-color:#d8e0eb;color:#475569}
+:root[data-theme="light"] .save-folder-option.selected{background:#eaf1ff;border-color:#7aa2f7}
+:root[data-theme="light"] .save-folder-icon,:root[data-theme="light"] .collections-info-button{background:#e8efff;border-color:#c6d6f5;color:#1d4ed8}
+:root[data-theme="light"] .save-folder-copy strong{color:#172033}
+:root[data-theme="light"] .save-folder-check{border-color:#94a3b8}
+:root[data-theme="light"] .save-request-footer,:root[data-theme="light"] .create-folder-footer{background:#f8fafc;border-color:var(--line)}
+:root[data-theme="light"] .response,:root[data-theme="light"] .ws-panel,:root[data-theme="light"] .panel-card{border-color:var(--line)}
+:root[data-theme="light"] .request-line select{color:#1d4ed8}
+:root[data-theme="light"] .add{color:#2563eb}
+:root[data-theme="light"] .json-key{color:#1d4ed8}
+:root[data-theme="light"] .json-string{color:#047857}
+:root[data-theme="light"] .json-number{color:#b45309}
+:root[data-theme="light"] .json-bool{color:#7c3aed}
+:root[data-theme="light"] .json-null{color:#64748b}
+:root[data-theme="light"] .security-evidence pre{background:#f1f5f9}
+:root[data-theme="light"] .collection-accordion summary:before{color:#2563eb}
+:root[data-theme="light"] .save-folder-copy small{color:#64748b}
+:root[data-theme="light"] .collections-info-button:active{background:#dbeafe}
+:root[data-theme="light"] .save-request-symbol,:root[data-theme="light"] .create-folder-symbol,:root[data-theme="light"] .brand-mark{color:#fff}
+:root[data-theme="light"] .html-preview-frame{background:#fff;color:#111}
+:root[data-theme="light"] #themeToggle{background:#fff;border-color:var(--line);color:#b45309;min-width:36px;padding-inline:9px}
+#themeToggle{min-width:36px;padding-inline:9px;font-size:16px;line-height:1}
+
 </style>
 <style id="apix-desktop-layout">
 @media (min-width: 1100px) {
@@ -201,7 +254,7 @@
 </style>
 </head>
 <body>
-<header class="appbar"><div class="brand"><span class="brand-mark">AX</span><span class="brand-copy"><strong>ApiX</strong><small>API CLIENT · BUILT FOR DEVELOPERS</small></span></div><div class="bar-actions"><button class="ghost" onclick="openImport()">⇄ cURL</button><button class="ghost" onclick="openOpenApiImport()">⇩ Swagger</button><button class="ghost" aria-label="درباره برنامه" onclick="showModal('aboutModal')">ⓘ</button></div></header>
+<header class="appbar"><div class="brand"><span class="brand-mark">AX</span><span class="brand-copy"><strong>ApiX</strong><small>API CLIENT · BUILT FOR DEVELOPERS</small></span></div><div class="bar-actions"><button class="ghost" id="themeToggle" onclick="toggleApiXTheme()" aria-label="تغییر پوسته" title="تغییر پوسته">☀</button><button class="ghost" onclick="openImport()">⇄ cURL</button><button class="ghost" onclick="openOpenApiImport()">⇩ Swagger</button><button class="ghost" aria-label="درباره برنامه" onclick="showModal('aboutModal')">ⓘ</button></div></header>
 <main class="layout" id="requestArea">
 <div class="mode-switch"><button class="active" data-mode="rest" onclick="setMode('rest')">REST API</button><button data-mode="graphql" onclick="setMode('graphql')">GraphQL</button><button data-mode="websocket" onclick="setMode('websocket')">WebSocket</button></div><div class="request-tabbar" id="requestTabBar" aria-label="درخواست‌های باز"></div><div class="request-line" id="requestLine"><button id="sendBtn" class="primary send" onclick="sendRequest()">ارسال</button><input id="url" class="ltr" placeholder="https://api.example.com/users" autocomplete="url"><select id="method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select></div>
 <div id="graphqlArea" class="graphql-panel hide"><div class="section-head">GraphQL Workspace <small>Query · Mutation · Variables</small></div><div class="field"><label>Operation name (اختیاری)</label><input id="graphqlOperation" placeholder="GetCountries" class="ltr"></div><div class="field"><label>Query / Mutation</label><textarea id="graphqlQuery" spellcheck="false" placeholder="query GetCountries { countries { code name } }"></textarea></div><div class="graphql-grid"><div class="field"><label>Variables · JSON</label><textarea id="graphqlVariables" spellcheck="false" placeholder='{"limit":10}'></textarea></div><div class="field"><label>راهنمای سریع</label><div class="notice">برای Query از query و برای تغییر داده از mutation استفاده کن. متغیرها را در بخش Variables به شکل JSON وارد کن. هدرها و Authorization از بخش مشترک درخواست استفاده می‌کنند.</div></div></div><div class="graphql-actions"><button class="primary" onclick="sendGraphQL()">اجرای GraphQL</button><button onclick="formatGraphQL()">فرمت Query</button><button onclick="validateGraphQL()">اعتبارسنجی Variables</button><button onclick="loadGraphQLIntrospection()">دریافت Schema</button><button onclick="showGraphQLDocs()">مستندات Schema</button></div><div id="graphqlInfo" class="tiny muted"></div><pre id="graphqlDocs" class="graphql-docs hide"></pre></div><div class="row" id="requestActions" style="margin-bottom:8px"><button class="ghost" onclick="saveRequest()">☆ ذخیره</button><button class="ghost" onclick="generateCurl()">کپی cURL</button><select id="environment" onchange="selectEnvironment(this.value)" aria-label="Environment"><option value="">بدون محیط</option></select></div>
@@ -1165,6 +1218,20 @@ function seedSamples(){
  store.set('folders',fs);store.set('collections',c);
 }
 function init(){$('appVersion').textContent='نسخه '+BehnamNative.getAppVersion();updateAssertionFields();renderAssertionList();seedSamples();seedScenarioExamples();setRows('paramsRows',[]);setRows('headerRows',[{key:'Accept',value:'application/json'},{key:'Content-Type',value:'application/json'}]);setRows('formRows',[]);renderAuth();renderHistory();renderCollections();renderEnvironments();$('collectionsPage').classList.add('hide');$('environmentsPage').classList.add('hide');$('historyPage').classList.add('hide');$('toolsPage').classList.add('hide');renderTestRuns();$('pendingId').value='';initRequestTabs();$('requestArea').addEventListener('input',queueWorkspaceSave);$('requestArea').addEventListener('change',queueWorkspaceSave)}
+
+function applyApiXTheme(theme, persist=true){
+ const selected=theme==='light'?'light':'dark';
+ document.documentElement.dataset.theme=selected;
+ if(persist){try{localStorage.setItem('apix_theme',selected)}catch(_){}}
+ const button=document.getElementById('themeToggle');
+ if(button){button.textContent=selected==='light'?'☾':'☀';button.title=selected==='light'?'فعال‌کردن حالت تاریک':'فعال‌کردن حالت روشن';button.setAttribute('aria-label',button.title);button.setAttribute('aria-pressed',String(selected==='light'))}
+ const meta=document.querySelector('meta[name="theme-color"]');
+ if(meta)meta.content=selected==='light'?'#f4f7fb':'#0b1120';
+ try{if(window.BehnamNative&&typeof BehnamNative.setSystemBarTheme==='function')BehnamNative.setSystemBarTheme(selected)}catch(_){}
+}
+function toggleApiXTheme(){applyApiXTheme(document.documentElement.dataset.theme==='light'?'dark':'light')}
+applyApiXTheme((()=>{try{return localStorage.getItem('apix_theme')||'dark'}catch(_){return 'dark'}})(),false);
+
 window.BehnamTester={onResult,back,onUploadFilesSelected,onUploadResult,onLoadTestResult,onSecurityAuditResult,onMonitorResult,onWebSocketEvent};document.addEventListener('DOMContentLoaded',async()=>{await initializeApiXStorage();wsHistory=store.get('wsHistory',[]);renderWsHistory();renderWsConnections();init();setRows('monitorHeadersRows',[]);startApiXMonitoring()});
 
 function startApiXMockServer(){

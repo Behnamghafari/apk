@@ -98,6 +98,19 @@ class MainActivity : Activity() {
     }
 
     inner class Bridge {
+        @JavascriptInterface fun setSystemBarTheme(theme: String) {
+            val light = theme == "light"
+            val surface = if (light) android.graphics.Color.rgb(244, 247, 251) else android.graphics.Color.rgb(11, 17, 32)
+            runOnUiThread {
+                window.statusBarColor = surface
+                window.navigationBarColor = surface
+                window.decorView.setBackgroundColor(surface)
+                val controller = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
+                controller.isAppearanceLightStatusBars = light
+                controller.isAppearanceLightNavigationBars = light
+                if (::web.isInitialized) web.setBackgroundColor(surface)
+            }
+        }
         @JavascriptInterface fun shouldImportLegacyStorage(): Boolean {
             val db = storageDb
             db.execSQL("CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)")

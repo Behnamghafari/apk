@@ -2,7 +2,7 @@ name: Build ApiX Windows Desktop
 
 on:
   push:
-    branches: [apix-desktop-windows]
+    branches: [apix-desktop-windows, main]
     paths:
       - 'apps/apix-desktop/**'
       - '.github/workflows/build-apix-desktop.yml'
