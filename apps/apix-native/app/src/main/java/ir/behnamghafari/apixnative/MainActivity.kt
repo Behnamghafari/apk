@@ -17,6 +17,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -54,7 +60,19 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
 
-private val ApiXColors: ColorScheme = darkColorScheme()
+private val ApiXColors: ColorScheme = darkColorScheme(
+    primary = Color(0xFF55DEC9),
+    onPrimary = Color(0xFF062B2A),
+    secondary = Color(0xFF9B9DFF),
+    onSecondary = Color(0xFF17183D),
+    background = Color(0xFF080F1B),
+    onBackground = Color(0xFFEAF2FC),
+    surface = Color(0xFF101B2A),
+    onSurface = Color(0xFFEAF2FC),
+    surfaceVariant = Color(0xFF1A293B),
+    onSurfaceVariant = Color(0xFFB3C2D4),
+    outline = Color(0xFF3B5067)
+)
 
 class MainActivity : ComponentActivity() {
     private val networkExecutor = Executors.newSingleThreadExecutor()
@@ -279,11 +297,17 @@ private fun ApiXScreen(
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        modifier = Modifier.fillMaxSize()
+            .background(Color(0xFF080F1B))
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("ApiX", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("Native API Client · Kotlin + Compose + OkHttp", style = MaterialTheme.typography.bodySmall)
+        ApiXBrandHeader(
+            environment = environmentName,
+            requestCount = savedRequests.size,
+            historyCount = history.size
+        )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = { requestMode = "rest" }, modifier = Modifier.weight(1f)) {
@@ -844,5 +868,64 @@ private fun ApiXScreen(
                 style = MaterialTheme.typography.bodySmall
             )
         }
+    }
+}
+
+@Composable
+private fun ApiXBrandHeader(environment: String, requestCount: Int, historyCount: Int) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(26.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF173B4A), Color(0xFF182743), Color(0xFF25264B))))
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(17.dp))
+                    .background(Color(0xFF55DEC9)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("A", color = Color(0xFF082B31),
+                    style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("ApiX", color = Color.White, style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold)
+                Text("NATIVE API WORKSPACE", color = Color(0xFF9FB8CC),
+                    style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+            Surface(color = Color(0xFF174F4C), shape = RoundedCornerShape(50)) {
+                Text("●  NATIVE", modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                    color = Color(0xFF7EF0D9), style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold)
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("قدرت کامل برای تست API", color = Color.White,
+                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("درخواست بساز، اجرا کن و پاسخ را با جزئیات بررسی کن.",
+                color = Color(0xFFB7C9DA), style = MaterialTheme.typography.bodySmall)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ApiXHeaderMetric("ENVIRONMENT", environment.ifBlank { "بدون محیط" })
+            ApiXHeaderMetric("SAVED", requestCount.toString())
+            ApiXHeaderMetric("HISTORY", historyCount.toString())
+        }
+    }
+}
+
+@Composable
+private fun ApiXHeaderMetric(label: String, value: String) {
+    Column(
+        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+            .background(Color(0x33202F4A)).padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(label, color = Color(0xFF8FAFC5), style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold)
+        Text(value, color = Color.White, style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
