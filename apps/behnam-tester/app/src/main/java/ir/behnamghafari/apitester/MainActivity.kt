@@ -634,7 +634,13 @@ class MainActivity : Activity() {
                 }
                 val pingSeconds = data.optInt("pingInterval", 25).coerceIn(0, 120)
                 webSockets.remove(id)?.close(1000, "Replaced")
-                val wsClient = client.newBuilder().pingInterval(pingSeconds.toLong(), TimeUnit.SECONDS).readTimeout(0, TimeUnit.MILLISECONDS).build()
+                val wsClient = client.newBuilder()
+                    .callTimeout(0, TimeUnit.MILLISECONDS)
+                    .connectTimeout(25, TimeUnit.SECONDS)
+                    .readTimeout(0, TimeUnit.MILLISECONDS)
+                    .writeTimeout(25, TimeUnit.SECONDS)
+                    .pingInterval(pingSeconds.toLong(), TimeUnit.SECONDS)
+                    .build()
                 val socket = wsClient.newWebSocket(requestBuilder.build(), object : WebSocketListener() {
                     override fun onOpen(webSocket: okhttp3.WebSocket, response: Response) {
                         webSockets[id] = webSocket
@@ -659,7 +665,16 @@ class MainActivity : Activity() {
                     }
                     override fun onFailure(webSocket: okhttp3.WebSocket, t: Throwable, response: Response?) {
                         webSockets.remove(id, webSocket)
-                        deliverWebSocket(JSONObject().put("id", id).put("event", "failure").put("error", t.message ?: t.javaClass.simpleName).put("httpCode", response?.code ?: 0))
+                        val responseBody = try { response?.peekBody(4096L)?.string()?.take(2000) ?: "" } catch (_: Exception) { "" }
+                        val causes = generateSequence(t as Throwable?) { it.cause }.take(5).joinToString(" <- ") { cause -> cause.javaClass.simpleName + (cause.message?.let { ": $it" } ?: "") }
+                        deliverWebSocket(JSONObject()
+                            .put("id", id).put("event", "failure")
+                            .put("error", t.message ?: t.javaClass.simpleName)
+                            .put("cause", causes)
+                            .put("httpCode", response?.code ?: 0)
+                            .put("httpMessage", response?.message ?: "")
+                            .put("responseBody", responseBody)
+                            .put("url", parsed.toString()))
                     }
                 })
                 webSockets[id] = socket
