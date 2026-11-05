@@ -9,7 +9,7 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 ## Feature inventory from the existing app
 
 - [ ] **Request workspace:** multiple open request tabs, per-tab state, restore workspace, REST / GraphQL / WebSocket modes.
-- [ ] **HTTP request builder:** methods, URL, query parameters, headers, enabled/disabled rows, request body modes (none, JSON, raw, URL-encoded form, multipart upload), request settings.
+- [~] **HTTP request builder:** methods, URL, query parameters, headers, and body modes (none, JSON, raw, URL-encoded form, multipart fields/files) are implemented. Editable enabled/disabled key-value rows and advanced request settings remain pending.
 - [ ] **Authorization:** none, Bearer, Basic, API Key; environment-variable interpolation.
 - [ ] **Scripting:** pre-request scripts, post-response scripts, script error reporting, assertions and assertion builder.
 - [x] **Environments (basic):** create/update environments, activate/switch environment, persist key/value variables, and interpolate `{{variable}}` in URL, query parameters, headers, body, and auth fields.
@@ -23,7 +23,7 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 - [~] **Import/export:** common cURL command import and Postman Collection v2.1 import/export are implemented. cURL export, Swagger/OpenAPI import (JSON and YAML), environment export/import, and API documentation export remain pending.
 - [ ] **Test runner:** folder runs, data-driven runs, batch execution, run reports, saved test runs and run comparison.
 - [ ] **Scenarios:** scenario editor, examples, sequential steps, variable extraction/substitution, assertions, execution logs and cancellation.
-- [ ] **Uploads:** file picker, multipart configuration, upload progress/result handling.
+- [~] **Uploads:** multi-file picker, multipart form fields/files, and bounded file sizes are implemented. Persisting selected file references and upload progress remain pending.
 - [ ] **API utilities:** code generation, JWT decoder, Base64URL decoder, JSON body format/validation, JSON Schema editor and validator.
 - [ ] **Developer tools:** mock API server, load testing, security audit.
 - [ ] **Monitoring:** saved endpoint monitors, manual checks, enable/disable, history and scheduled monitoring.
@@ -41,7 +41,8 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 - Encrypted persistent cookie jar integrated with OkHttp; cookies are scoped by domain/path and expired entries are cleaned when accessed.
 - History actions to restore a request's method/URL, delete individual entries, and clear recent history.
 - Nested folder navigation, subfolder creation, current-folder rename/delete, request move between folders, and saved-request deletion.
-- CI debug APK build verified successfully for commit `85bac21f80f80378479d3be5a72ad73af90d9bdd`.
+- Multipart upload request mode with multiple document selection, form fields, file field name, per-file 20 MB and aggregate 50 MB limits.
+- CI debug APK build verified successfully for commit `d69c766f62aaa5b586073bd6a839baa341384bc9`.
 
 Known limits in this increment: Postman file-based form-data entries are not imported as local files; advanced cURL flags and cURL export are not yet supported.
 
