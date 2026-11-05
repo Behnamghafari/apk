@@ -13,8 +13,7 @@
   },
   "devDependencies": {
     "electron": "^40.0.0",
-    "electron-builder": "^26.0.12",
-    "better-sqlite3": "^12.6.2"
+    "electron-builder": "^26.0.12"
   },
   "build": {
     "appId": "ir.behnamghafari.apix",
@@ -49,9 +48,13 @@
     },
     "extraMetadata": {
       "main": "src/main.cjs"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**"
+    ]
   },
   "dependencies": {
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "better-sqlite3": "^12.6.2"
   }
 }
