@@ -33,6 +33,43 @@ jobs:
           base64 --decode .github/keys/behnam-tester-debug.keystore.base64 > "$HOME/.android/debug.keystore"
           chmod 600 "$HOME/.android/debug.keystore"
           keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey | grep -E "SHA256:|SHA1:"
+      - name: Restore production signing key (optional)
+        id: release-signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "ANDROID_RELEASE_SIGNING=false" >> "$GITHUB_ENV"
+            echo "Production signing secrets are not configured; skipping release APK."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/apix-production.jks"
+          chmod 600 "$RUNNER_TEMP/apix-production.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/apix-production.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANDROID_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "ANDROID_RELEASE_SIGNING=true" >> "$GITHUB_ENV"
+      - name: Build production APK
+        if: env.ANDROID_RELEASE_SIGNING == 'true'
+        run: gradle -p apps/behnam-tester :app:assembleRelease
+      - name: Verify production APK signature
+        if: env.ANDROID_RELEASE_SIGNING == 'true'
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/.android/sdk}}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs apps/behnam-tester/app/build/outputs/apk/release/app-release.apk
+      - name: Upload production APK
+        if: env.ANDROID_RELEASE_SIGNING == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: apix-production-apk
+          path: apps/behnam-tester/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
       - name: Build debug APK
         run: gradle -p apps/behnam-tester :app:assembleDebug
       - name: Run Android Lint
@@ -49,6 +86,17 @@ jobs:
           name: behnam-tester-debug-apk
           path: apps/behnam-tester/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Publish production APK download
+        if: env.ANDROID_RELEASE_SIGNING == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: behnam-tester-latest
+          name: ApiX - Latest Android Build
+          body: نسخه انتشار ApiX برای نصب و توزیع.
+          prerelease: true
+          make_latest: false
+          overwrite_files: true
+          files: apps/behnam-tester/app/build/outputs/apk/release/app-release.apk
       - name: Publish direct APK download
         uses: softprops/action-gh-release@v2
         with:
