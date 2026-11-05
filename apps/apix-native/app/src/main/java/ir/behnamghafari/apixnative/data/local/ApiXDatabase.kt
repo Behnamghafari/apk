@@ -184,6 +184,9 @@ class ApiXDatabase(context: Context) :
             "request_history", null, null, null, null, null, "created_at DESC", limit.coerceIn(1, 2000).toString()
         ).use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.toHistory()) } }
 
+    fun updateHistoryUrl(id: String, url: String): Int =
+        writableDatabase.update("request_history", ContentValues().apply { put("url", url) }, "id = ?", arrayOf(id))
+
     fun clearHistory() {
         writableDatabase.delete("request_history", null, null)
     }
