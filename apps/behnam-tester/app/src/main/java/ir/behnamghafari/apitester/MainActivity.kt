@@ -124,6 +124,37 @@ class MainActivity : Activity() {
             return imported
         }
 
+        @JavascriptInterface fun replaceStorageSnapshot(raw: String): Int {
+            require(raw.length <= 32 * 1024 * 1024) { "Backup file is too large" }
+            val records = JSONArray(raw)
+            require(records.length() <= 5000) { "Too many backup records" }
+            val prepared = ArrayList<Pair<String, String>>(records.length())
+            val seen = HashSet<String>()
+            for (i in 0 until records.length()) {
+                val record = records.optJSONObject(i) ?: throw IllegalArgumentException("Invalid backup record")
+                val key = record.optString("key")
+                require(key.startsWith("bt_") && key.length <= 160 && seen.add(key)) { "Invalid or duplicate storage key" }
+                require(record.has("value")) { "Backup record has no value" }
+                val encoded = JSONObject().put("v", record.opt("value")).getString("v")
+                require(encoded.length <= 8 * 1024 * 1024) { "A backup value is too large" }
+                prepared.add(key to encoded)
+            }
+            val db = storageDb
+            db.beginTransaction()
+            try {
+                db.delete("kv", null, null)
+                for ((key, value) in prepared) {
+                    val values = android.content.ContentValues().apply {
+                        put("key", key)
+                        put("value", value)
+                    }
+                    db.insertOrThrow("kv", null, values)
+                }
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+            return prepared.size
+        }
+
 
 
         @JavascriptInterface fun runMonitorCheck(raw: String) {
