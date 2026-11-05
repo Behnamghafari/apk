@@ -186,7 +186,7 @@ async function sendRequest(raw) {
     const url=new URL(d.url); if(!['http:','https:'].includes(url.protocol)) throw new Error('Only HTTP and HTTPS are supported.');
     const headers={}; for(const h of d.headers||[]) if(h && h.enabled!==false && h.key) headers[h.key]=h.value ?? '';
     const hasCookie=Object.keys(headers).some(k=>k.toLowerCase()==='cookie');
-    if(!hasCookie){const host=url.hostname.toLowerCase(),pathName=url.pathname||'/';const jar=db.prepare('SELECT * FROM cookies').all().filter(c=>(host===c.domain.replace(/^\\./,'').toLowerCase()||host.endsWith('.'+c.domain.replace(/^\\./,'').toLowerCase()))&&pathName.startsWith(c.path||'/')&&(!c.secure||url.protocol==='https:')&&(!c.expires||Date.parse(c.expires)>Date.now()));if(jar.length)headers.Cookie=jar.map(c=>c.name+'='+c.value).join('; ');}
+    if(!hasCookie){const host=url.hostname.toLowerCase(),pathName=url.pathname||'/';const jar=db.prepare('SELECT * FROM cookies').all().filter(c=>(host===c.domain.replace(/^\./,'').toLowerCase()||host.endsWith('.'+c.domain.replace(/^\./,'').toLowerCase()))&&pathName.startsWith(c.path||'/')&&(!c.secure||url.protocol==='https:')&&(!c.expires||Date.parse(c.expires)>Date.now()));if(jar.length)headers.Cookie=jar.map(c=>c.name+'='+c.value).join('; ');}
     const method=String(d.method||'GET').toUpperCase();
     let body;
     if(!['GET','HEAD'].includes(method)) {
@@ -200,7 +200,7 @@ async function sendRequest(raw) {
     finally { clearTimeout(timer); }
     for(const rawCookie of (response.headers.getSetCookie?.()||[])){
       const parts=rawCookie.split(';').map(x=>x.trim());const pair=parts.shift()||'';const eq=pair.indexOf('=');
-      if(eq>0){const name=pair.slice(0,eq),value=pair.slice(eq+1);const domain=(parts.find(x=>/^domain=/i.test(x))||'').split('=')[1]||url.hostname;const cookiePath=(parts.find(x=>/^path=/i.test(x))||'Path=/').split('=')[1]||'/';const expires=(parts.find(x=>/^expires=/i.test(x))||'').slice(8)||null;const maxAge=(parts.find(x=>/^max-age=/i.test(x))||'').slice(8);if(maxAge==='0')db.prepare('DELETE FROM cookies WHERE name=? AND domain=? AND path=?').run(name,domain,cookiePath);else db.prepare('INSERT OR REPLACE INTO cookies(name,value,domain,path,expires,secure,httpOnly) VALUES(?,?,?,?,?,?,?)').run(name,value,domain,cookiePath,expires,/;\\s*secure(?:;|$)/i.test(';'+rawCookie)?1:0,/httponly/i.test(rawCookie)?1:0);}
+      if(eq>0){const name=pair.slice(0,eq),value=pair.slice(eq+1);const domain=(parts.find(x=>/^domain=/i.test(x))||'').split('=')[1]||url.hostname;const cookiePath=(parts.find(x=>/^path=/i.test(x))||'Path=/').split('=')[1]||'/';const expires=(parts.find(x=>/^expires=/i.test(x))||'').slice(8)||null;const maxAge=(parts.find(x=>/^max-age=/i.test(x))||'').slice(8);if(maxAge==='0')db.prepare('DELETE FROM cookies WHERE name=? AND domain=? AND path=?').run(name,domain,cookiePath);else db.prepare('INSERT OR REPLACE INTO cookies(name,value,domain,path,expires,secure,httpOnly) VALUES(?,?,?,?,?,?,?)').run(name,value,domain,cookiePath,expires,/;\s*secure(?:;|$)/i.test(';'+rawCookie)?1:0,/httponly/i.test(rawCookie)?1:0);}
     }
     const buf=Buffer.from(await response.arrayBuffer()); const truncated=buf.length>MAX_RESPONSE;
     const bytes=buf.subarray(0,MAX_RESPONSE); const type=response.headers.get('content-type')||'';
@@ -230,7 +230,7 @@ async function securityAudit(raw) {
     if(!['POST','PUT','PATCH','DELETE'].includes(method))throw new Error('متد آزمایشی مجاز نیست');
     const tokenA=String(d.tokenA||'').trim(),tokenB=String(d.tokenB||'').trim(),probeParam=String(d.probeParam||'').trim(),probeValue=String(d.probeValue||'apix-test');
     if(tokenA.length!==0!== (tokenB.length!==0))throw new Error('برای مقایسه دسترسی هر دو توکن را وارد کن');
-    if(probeParam.length>80||/[\\r\\n]/.test(probeParam)||probeValue.length>300)throw new Error('پارامتر آزمایشی معتبر نیست');
+    if(probeParam.length>80||/[\r\n]/.test(probeParam)||probeValue.length>300)throw new Error('پارامتر آزمایشی معتبر نیست');
     const checks=[];const check=(name,ok,detail,severity='REVIEW',confidence=severity==='HIGH'?'متوسط':severity==='MEDIUM'?'پایین':'اطلاعاتی',remediation='پیکربندی و رفتار endpoint را با مستندات امنیتی سرویس تطبیق بده.',evidence=null,classification=ok?'بدون نشانه':'نیازمند بررسی')=>checks.push({name,ok,detail,severity,confidence,remediation,evidence,classification});
     const get=async(target,options={})=>{const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);try{return await fetch(target,{...options,signal:controller.signal,redirect:'manual'});}finally{clearTimeout(timer);}};
     const first=await get(url);const h=Object.fromEntries(first.headers.entries());const finalUrl=first.url||url.href;const https=new URL(finalUrl).protocol==='https:';
@@ -244,7 +244,7 @@ async function securityAudit(raw) {
     check('Server disclosure',!h.server,h.server||'هدر Server افشا نشده');
     check('Technology disclosure',!h['x-powered-by'],h['x-powered-by']||'هدر X-Powered-By افشا نشده');
     const cookies=first.headers.getSetCookie?.()||[];
-    check('Cookie Secure flag',!cookies.length||cookies.every(x=>/;\\s*secure(?:;|$)/i.test(';'+x)),!cookies.length?'کوکی تنظیم نشد':cookies.every(x=>/;\\s*secure(?:;|$)/i.test(';'+x))?'تمام کوکی‌های پاسخ Secure هستند':'حداقل یک کوکی فاقد Secure است','MEDIUM');
+    check('Cookie Secure flag',!cookies.length||cookies.every(x=>/;\s*secure(?:;|$)/i.test(';'+x)),!cookies.length?'کوکی تنظیم نشد':cookies.every(x=>/;\s*secure(?:;|$)/i.test(';'+x))?'تمام کوکی‌های پاسخ Secure هستند':'حداقل یک کوکی فاقد Secure است','MEDIUM');
     check('Cookie HttpOnly flag',!cookies.length||cookies.every(x=>/httponly/i.test(x)),!cookies.length?'کوکی تنظیم نشد':cookies.every(x=>/httponly/i.test(x))?'تمام کوکی‌های پاسخ HttpOnly هستند':'حداقل یک کوکی فاقد HttpOnly است','MEDIUM');
     const pre=await get(url,{method:'OPTIONS',headers:{Origin:origin.href,'Access-Control-Request-Method':method,'Access-Control-Request-Headers':'authorization,content-type'}});
     const ph=Object.fromEntries(pre.headers.entries()),allowOrigin=ph['access-control-allow-origin']||'',allowMethods=ph['access-control-allow-methods']||'',allowHeaders=ph['access-control-allow-headers']||'';
@@ -265,7 +265,7 @@ async function securityAudit(raw) {
     if(probeParam){
       const base=new URL(url);const probe=async value=>{const u=new URL(base);u.searchParams.set(probeParam,value);const r=await get(u);return {status:r.status,body:(await r.text()).slice(0,98304)};};
       const baseline=await probe(probeValue),single=await probe(probeValue+"'"),double=await probe(probeValue+'"'),signatures=['sql syntax','sqlite_exception','sqlstate','unterminated quoted','mysql_fetch','postgresql','odbc','ora-'],quoteText=(single.body+' '+double.body).toLowerCase(),signature=signatures.find(x=>quoteText.includes(x)),sqlSignal=!!signature||((single.status>=500&&single.status<600)&&!(baseline.status>=500&&baseline.status<600));
-      const sqlEvidence={parameter:probeParam,baselineStatus:baseline.status,singleQuoteStatus:single.status,doubleQuoteStatus:double.status,databaseErrorSignature:signature||'',responseExcerpt:(single.body+'\\n'+double.body).slice(0,1200)};
+      const sqlEvidence={parameter:probeParam,baselineStatus:baseline.status,singleQuoteStatus:single.status,doubleQuoteStatus:double.status,databaseErrorSignature:signature||'',responseExcerpt:(single.body+'\n'+double.body).slice(0,1200)};
       check('SQL injection (error signal)',!sqlSignal,sqlSignal?'پس از افزودن کوتیشن، نشانه خطای پایگاه داده یا تغییر غیرعادی کد پاسخ دیده شد؛ exploit تأیید نشده است':'با probe کوتیشن، نشانه واضح خطای SQL مشاهده نشد؛ نبود SQLi ثابت نمی‌شود',sqlSignal?'HIGH':'INFO',sqlSignal?'پایین':'اطلاعاتی','از query پارامتری و prepared statement استفاده کن؛ جزئیات خطای پایگاه داده را به پاسخ عمومی ارسال نکن.',sqlEvidence,sqlSignal?'نشانه احتمالی؛ تأیید دستی لازم است':'نشانه‌ای مشاهده نشد');
       const marker='apixxssprobe'+Date.now().toString(36),reflected=await probe(probeValue+'<apix-probe>'+marker+'</apix-probe>'),isReflected=reflected.body.toLowerCase().includes(marker.toLowerCase());
       check('Reflected input (XSS indicator)',!isReflected,isReflected?'marker بی‌خطر ورودی در پاسخ بازتاب شد؛ اجرای کد بررسی نشده و XSS تأیید نشده است':'marker آزمایشی عیناً در پاسخ دیده نشد',isReflected?'MEDIUM':'INFO',isReflected?'پایین':'اطلاعاتی','ورودی را متناسب با context خروجی HTML، attribute، JavaScript یا URL کدگذاری کن؛ برای داده متنی از textContent استفاده کن.',{parameter:probeParam,status:reflected.status,marker,markerReflected:isReflected,responseExcerpt:reflected.body.slice(0,1200)},isReflected?'بازتاب ورودی؛ نیازمند بررسی context و encoding':'نشانه‌ای مشاهده نشد');
