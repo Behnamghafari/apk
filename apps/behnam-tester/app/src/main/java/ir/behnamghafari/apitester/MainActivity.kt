@@ -293,8 +293,16 @@ class MainActivity : Activity() {
                     require(requestedMethod in setOf("POST", "PUT", "PATCH", "DELETE")) { "متد آزمایشی مجاز نیست" }
                     require(tokenA.isEmpty() == tokenB.isEmpty()) { "برای مقایسه دسترسی هر دو توکن را وارد کن" }
                     val checks = JSONArray()
-                    fun check(name: String, ok: Boolean, detail: String, severity: String = "REVIEW") {
-                        checks.put(JSONObject().put("name", name).put("ok", ok).put("detail", detail).put("severity", severity))
+                    fun check(name: String, ok: Boolean, detail: String, severity: String = "REVIEW",
+                        confidence: String = if (severity == "HIGH") "متوسط" else if (severity == "MEDIUM") "پایین" else "اطلاعاتی",
+                        remediation: String = "پیکربندی و رفتار endpoint را با مستندات امنیتی سرویس تطبیق بده.",
+                        evidence: JSONObject? = null,
+                        classification: String = if (ok) "بدون نشانه" else "نیازمند بررسی") {
+                        val item = JSONObject().put("name", name).put("ok", ok).put("detail", detail)
+                            .put("severity", severity).put("confidence", confidence)
+                            .put("remediation", remediation).put("classification", classification)
+                        if (evidence != null) item.put("evidence", evidence)
+                        checks.put(item)
                     }
                     var status = 0
                     var finalUrl = url
@@ -361,13 +369,18 @@ class MainActivity : Activity() {
                             if (anonymousExposed) "درخواست بدون توکن همان پاسخ موفق کاربر A را گرفت؛ احتمال نبود کنترل احراز هویت" else "پاسخ بدون توکن: ${anonymous.first}، پاسخ کاربر A: ${a.first}", "HIGH")
                         val bDenied = b.first == 401 || b.first == 403
                         val sameSuccessfulBody = a.first in 200..299 && b.first in 200..299 && a.second == b.second
+                        val bolaEvidence = JSONObject().put("anonymousStatus", anonymous.first)
+                            .put("accountAStatus", a.first).put("accountBStatus", b.first)
+                            .put("successfulBodiesIdentical", sameSuccessfulBody)
                         check("Cross-account access (BOLA/IDOR signal)", bDenied || !sameSuccessfulBody,
                             when {
                                 bDenied -> "کاربر B با پاسخ ${b.first} رد شد؛ نشانه مثبت کنترل دسترسی"
                                 sameSuccessfulBody -> "هر دو حساب پاسخ موفق و بدنه کاملاً یکسان گرفتند؛ احتمال دسترسی بین‌حسابی را دستی بررسی کن"
                                 b.first in 200..299 -> "کاربر B نیز پاسخ موفق گرفت؛ محتوای دو حساب متفاوت است، مالکیت داده را دستی بررسی کن"
                                 else -> "درخواست A: ${a.first}، درخواست B: ${b.first}"
-                            }, "HIGH")
+                            }, "HIGH", "پایین",
+                            "در سمت سرور مالکیت هر شیء را برای هر درخواست بررسی کن؛ صرفاً به شناسه ارسالی یا احراز هویت اکتفا نکن.",
+                            bolaEvidence, if (sameSuccessfulBody) "نشانه احتمالی؛ تأیید مالکیت لازم است" else "با این مقایسه نشانه‌ای مشاهده نشد")
                     } else {
                         check("Cross-account access (BOLA/IDOR signal)", true, "برای این آزمون دو توکن مجزا وارد نشده است؛ بررسی انجام نشد", "INFO")
                     }
@@ -391,16 +404,28 @@ class MainActivity : Activity() {
                         val sqlErrors = listOf("sql syntax", "sqlite_exception", "sqlstate", "unterminated quoted", "mysql_fetch", "postgresql", "odbc", "ora-")
                         val quoteError = (singleQuote.second + " " + doubleQuote.second).lowercase()
                         val sqlSignal = sqlErrors.any { quoteError.contains(it) } || (singleQuote.first in 500..599 && baseline.first !in 500..599)
+                        val sqlEvidence = JSONObject().put("parameter", probeParam)
+                            .put("baselineStatus", baseline.first).put("singleQuoteStatus", singleQuote.first)
+                            .put("doubleQuoteStatus", doubleQuote.first)
+                            .put("databaseErrorSignature", sqlErrors.firstOrNull { quoteError.contains(it) } ?: "")
+                            .put("responseExcerpt", (singleQuote.second + "\\n" + doubleQuote.second).take(1200))
                         check("SQL injection (error signal)", !sqlSignal,
-                            if (sqlSignal) "تغییر پاسخ یا پیام خطای مرتبط با پایگاه داده پس از افزودن کوتیشن دیده شد؛ نیازمند بررسی دستی" else "با probe کوتیشن، نشانه واضح خطای SQL مشاهده نشد؛ این نتیجه نبود SQLi را ثابت نمی‌کند",
-                            if (sqlSignal) "HIGH" else "INFO")
+                            if (sqlSignal) "پس از افزودن کوتیشن، نشانه خطای پایگاه داده یا تغییر غیرعادی کد پاسخ دیده شد؛ exploit تأیید نشده است" else "با probe کوتیشن، نشانه واضح خطای SQL مشاهده نشد؛ نبود SQLi ثابت نمی‌شود",
+                            if (sqlSignal) "HIGH" else "INFO", if (sqlSignal) "پایین" else "اطلاعاتی",
+                            "از query پارامتری و prepared statement استفاده کن؛ جزئیات خطای پایگاه داده را به پاسخ عمومی ارسال نکن.",
+                            sqlEvidence, if (sqlSignal) "نشانه احتمالی؛ تأیید دستی لازم است" else "نشانه‌ای مشاهده نشد")
                         val marker = "apixxssprobe" + System.currentTimeMillis().toString(36)
                         val inertMarker = "<apix-probe>$marker</apix-probe>"
                         val reflected = probe(probeValue + inertMarker)
                         val isReflected = reflected.second.contains(marker, true)
+                        val xssEvidence = JSONObject().put("parameter", probeParam).put("status", reflected.first)
+                            .put("marker", marker).put("markerReflected", isReflected)
+                            .put("responseExcerpt", reflected.second.take(1200))
                         check("Reflected input (XSS indicator)", !isReflected,
-                            if (isReflected) "marker بی‌خطر ورودی بدون حذف/کدگذاری در پاسخ بازتاب شد؛ زمینه HTML باید دستی بررسی شود" else "marker آزمایشی عیناً در پاسخ دیده نشد",
-                            if (isReflected) "MEDIUM" else "INFO")
+                            if (isReflected) "marker بی‌خطر ورودی در پاسخ بازتاب شد؛ اجرای کد بررسی نشده و XSS تأیید نشده است" else "marker آزمایشی عیناً در پاسخ دیده نشد",
+                            if (isReflected) "MEDIUM" else "INFO", if (isReflected) "پایین" else "اطلاعاتی",
+                            "ورودی را متناسب با context خروجی HTML، attribute، JavaScript یا URL کدگذاری کن؛ برای داده متنی از textContent استفاده کن.",
+                            xssEvidence, if (isReflected) "بازتاب ورودی؛ نیازمند بررسی context و encoding" else "نشانه‌ای مشاهده نشد")
                     } else {
                         check("SQL injection (error signal)", true, "نام پارامتر Query تعیین نشده؛ آزمون اجرا نشد", "INFO")
                         check("Reflected input (XSS indicator)", true, "نام پارامتر Query تعیین نشده؛ آزمون اجرا نشد", "INFO")
