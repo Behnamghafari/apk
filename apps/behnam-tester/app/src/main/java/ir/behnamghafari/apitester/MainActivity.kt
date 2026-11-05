@@ -1131,13 +1131,13 @@ class MainActivity : Activity() {
                         return
                     }
                     val source = android.database.sqlite.SQLiteDatabase.openDatabase(file.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
-                    source.rawQuery("PRAGMA quick_check", null).use { cursor ->
-                        require(cursor.moveToFirst() && cursor.getString(0).equals("ok", true)) { "ساختار فایل SQLite سالم نیست" }
-                    }
                     var count = 0
                     var folders = 0
                     var collections = 0
                     try {
+                        source.rawQuery("PRAGMA quick_check", null).use { cursor ->
+                            require(cursor.moveToFirst() && cursor.getString(0).equals("ok", true)) { "ساختار فایل SQLite سالم نیست" }
+                        }
                         source.rawQuery("SELECT format, version FROM apix_backup_meta LIMIT 1", null).use { cursor ->
                             require(cursor.moveToFirst() && cursor.getString(0) == "apix-sqlite-backup" && cursor.getInt(1) == 1) { "این فایل بکاپ SQLite معتبر ApiX نیست" }
                         }
