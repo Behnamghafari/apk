@@ -36,7 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import ir.behnamghafari.apixnative.data.collection.PostmanCollectionCodec\nimport ir.behnamghafari.apixnative.data.model.ApiEnvironment
+import ir.behnamghafari.apixnative.data.collection.PostmanCollectionCodec\nimport ir.behnamghafari.apixnative.data.importer.CurlCommandParser\nimport ir.behnamghafari.apixnative.data.model.ApiEnvironment
 import ir.behnamghafari.apixnative.data.model.SavedRequest
 import ir.behnamghafari.apixnative.data.network.HttpKeyValue
 import ir.behnamghafari.apixnative.data.network.HttpRequestEngine
@@ -85,7 +85,7 @@ private fun ApiXScreen(
     val authTypes = listOf("none", "bearer", "basic", "apikey")
     val bodyTypes = listOf("none", "json", "raw", "form")
 
-    var method by remember { mutableStateOf("GET") }
+    var curlInput by remember { mutableStateOf("") }\n    var method by remember { mutableStateOf("GET") }
     var methodMenuOpen by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("https://httpbin.org/get") }
     var params by remember { mutableStateOf("") }
@@ -287,6 +287,24 @@ private fun ApiXScreen(
             "متغیرها با قالب {{نام}} در URL، پارامترها، هدرها، بدنه و مقادیر احراز هویت جایگزین می‌شوند.",
             style = MaterialTheme.typography.bodySmall
         )
+
+        Text("Import cURL", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(
+            value = curlInput, onValueChange = { curlInput = it },
+            modifier = Modifier.fillMaxWidth(), minLines = 2,
+            label = { Text("دستور curl را اینجا Paste کن") }
+        )
+        OutlinedButton(
+            onClick = {
+                runCatching {
+                    val imported = CurlCommandParser.parse(curlInput)
+                    restoreRequest(imported)
+                    curlInput = ""
+                    response = "دستور cURL وارد شد؛ درخواست آماده ارسال است."
+                }.onFailure { response = "خطای cURL: ${it.message}" }
+            },
+            enabled = curlInput.isNotBlank(), modifier = Modifier.fillMaxWidth()
+        ) { Text("تبدیل cURL به درخواست") }
 
         Text("Collections · Postman v2.1", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
