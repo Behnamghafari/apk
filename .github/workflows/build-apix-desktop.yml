@@ -1,0 +1,40 @@
+name: Build ApiX Windows Desktop
+
+on:
+  push:
+    branches: [apix-desktop-windows]
+    paths:
+      - 'apps/apix-desktop/**'
+      - '.github/workflows/build-apix-desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/apix-desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install
+      - name: Validate JavaScript syntax
+        run: npm run check
+      - name: Build Windows installer and portable app
+        run: npm run dist:win
+      - name: Upload Windows builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: apix-windows-desktop
+          path: |
+            apps/apix-desktop/dist/*.exe
+          if-no-files-found: error
+          retention-days: 30

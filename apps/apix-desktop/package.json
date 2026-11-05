@@ -1,0 +1,60 @@
+{
+  "name": "apix-desktop",
+  "version": "1.0.0",
+  "description": "ApiX desktop API client for Windows",
+  "main": "src/main.cjs",
+  "author": "Behnam Ghafari",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis",
+    "check": "node --check src/main.cjs && node --check src/preload.cjs && node scripts/check-html.cjs",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "electron": "^40.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "ir.behnamghafari.apix",
+    "productName": "ApiX",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "ApiX-${version}-${arch}.${ext}",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ApiX"
+    },
+    "extraMetadata": {
+      "main": "src/main.cjs"
+    },
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**"
+    ]
+  },
+  "dependencies": {
+    "ws": "^8.18.3",
+    "better-sqlite3": "^12.6.2"
+  }
+}
