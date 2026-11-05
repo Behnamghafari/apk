@@ -137,7 +137,7 @@ class MainActivity : Activity() {
                                 for (source in listOf(existing, incoming)) {
                                     for (index in 0 until source.length()) {
                                         val item = source.opt(index) ?: continue
-                                        val id = item.optJSONObject()?.optString("id")?.takeIf { it.isNotBlank() } ?: item.toString()
+                                        val id = (item as? JSONObject)?.optString("id")?.takeIf { it.isNotBlank() } ?: item.toString()
                                         if (seen.add(id)) merged.put(item)
                                     }
                                 }
