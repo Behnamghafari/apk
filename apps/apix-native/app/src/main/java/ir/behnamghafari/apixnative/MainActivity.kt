@@ -35,11 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import okio.Buffer
+import ir.behnamghafari.apixnative.data.network.HttpKeyValue
+import ir.behnamghafari.apixnative.data.network.HttpRequestEngine
+import ir.behnamghafari.apixnative.data.network.HttpRequestSpec
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -47,16 +45,7 @@ private val ApiXColors: ColorScheme = darkColorScheme()
 
 class MainActivity : ComponentActivity() {
     private val networkExecutor = Executors.newSingleThreadExecutor()
-    private val httpClient by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
-            .callTimeout(90, TimeUnit.SECONDS)
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .build()
-    }
+    private val requestEngine by lazy { HttpRequestEngine() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,54 +68,27 @@ class MainActivity : ComponentActivity() {
         callback: (String) -> Unit
     ) {
         networkExecutor.execute {
-            val startedAt = System.nanoTime()
             val output = try {
-                val url = rawUrl.trim()
-                require(url.startsWith("https://") || url.startsWith("http://")) {
-                    "آدرس باید با http:// یا https:// شروع شود."
-                }
-
-                val builder = Request.Builder().url(url)
-                rawHeaders.lineSequence()
+                val parsedHeaders = rawHeaders.lineSequence()
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
-                    .forEach { line ->
+                    .map { line ->
                         val separator = line.indexOf(':')
                         require(separator > 0) { "فرمت هدر معتبر نیست: $line" }
-                        builder.addHeader(line.substring(0, separator).trim(), line.substring(separator + 1).trim())
-                    }
-
-                val requestBody = if (method in setOf("POST", "PUT", "PATCH")) {
-                    body.toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
-                } else {
-                    null
-                }
-
-                httpClient.newCall(builder.method(method, requestBody).build()).execute().use { response ->
-                    val buffer = Buffer()
-                    val source = response.body?.source()
-                    val maxBytes = 2L * 1024L * 1024L
-                    while (source != null && buffer.size <= maxBytes) {
-                        if (source.read(buffer, 8192L) == -1L) break
-                    }
-                    val truncated = buffer.size > maxBytes
-                    val bytes = buffer.readByteArray(minOf(buffer.size, maxBytes))
-                    val responseText = bytes.toString(Charsets.UTF_8)
-                    val headersText = response.headers.names().sorted().joinToString("\n") { name ->
-                        "$name: ${response.headers.values(name).joinToString(", ")}"
-                    }
-                    val elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)
-                    buildString {
-                        append("HTTP ${response.code} ${response.message}\n")
-                        append("زمان پاسخ: ${elapsed} ms\n")
-                        append("آدرس نهایی: ${response.request.url}\n\n")
-                        append("HEADERS\n")
-                        append(headersText)
-                        append("\n\nBODY\n")
-                        append(responseText)
-                        if (truncated) append("\n\n[پاسخ در محدودیت ۲ مگابایت بریده شد]")
-                    }
-                }
+                        HttpKeyValue(
+                            key = line.substring(0, separator).trim(),
+                            value = line.substring(separator + 1).trim()
+                        )
+                    }.toList()
+                requestEngine.execute(
+                    HttpRequestSpec(
+                        method = method,
+                        url = rawUrl,
+                        headers = parsedHeaders,
+                        body = body,
+                        bodyType = if (method in setOf("POST", "PUT", "PATCH")) "json" else "none"
+                    )
+                ).asDisplayText()
             } catch (error: Exception) {
                 "خطا: ${error.message ?: error.javaClass.simpleName}"
             }
