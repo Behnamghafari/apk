@@ -12,7 +12,7 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 - [ ] **HTTP request builder:** methods, URL, query parameters, headers, enabled/disabled rows, request body modes (none, JSON, raw, URL-encoded form, multipart upload), request settings.
 - [ ] **Authorization:** none, Bearer, Basic, API Key; environment-variable interpolation.
 - [ ] **Scripting:** pre-request scripts, post-response scripts, script error reporting, assertions and assertion builder.
-- [ ] **Environments:** multiple environments, active environment, variables, global variables, duplicate/edit/delete, import/export.
+- [x] **Environments (basic):** create/update environments, activate/switch environment, persist key/value variables, and interpolate `{{variable}}` in URL, query parameters, headers, body, and auth fields.\n- [ ] **Environments (remaining):** global variables, duplicate/delete, secret encryption, import/export.
 - [ ] **Cookies:** managed cookie jar, add/delete/clear, cookie integration with requests.
 - [ ] **Collections and folders:** save/update requests, nested folders, rename/delete, folder navigation, collection import/export, sample data.
 - [ ] **History:** request history, restore, delete, clear.
@@ -30,7 +30,7 @@ The current `tester.html` is approximately 199 KB and contains 197 distinct Java
 
 ## Delivery phases
 
-1. **Foundation:** navigation, design system, persistence/data models, request workspace, robust HTTP engine, query/header/body/auth support.
+1. **Foundation:** navigation, design system, persistence/data models, request workspace, robust HTTP engine, query/header/body/auth support. Basic environment editor and variable interpolation are implemented; encrypted secret storage remains pending.
 2. **Core workflow:** environments, variables, cookies, collections, nested folders, history, import/export and workspace restoration.
 3. **Advanced protocols:** GraphQL, WebSocket, multipart uploads and response inspection/preview.
 4. **Automation:** scripting, assertions, folder/data-driven runner, test reports, scenarios.
