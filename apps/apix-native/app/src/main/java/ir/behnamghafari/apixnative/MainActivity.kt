@@ -111,6 +111,12 @@ private fun ApiXScreen(
     var apiKeyIn by remember { mutableStateOf("header") }
     var requestName by remember { mutableStateOf("") }
     var response by remember { mutableStateOf("پاسخ درخواست اینجا نمایش داده می‌شود.") }
+    var responseBody by remember { mutableStateOf("") }
+    var responseHeaders by remember { mutableStateOf("") }
+    var responseFinalUrl by remember { mutableStateOf("") }
+    var responseTab by remember { mutableStateOf("body") }
+    var responseSearch by remember { mutableStateOf("") }
+    var prettyResponseJson by remember { mutableStateOf(true) }
     var loading by remember { mutableStateOf(false) }
     var savedRequests by remember { mutableStateOf(repository.savedRequests()) }
     var history by remember { mutableStateOf(repository.history(8)) }
@@ -517,7 +523,12 @@ private fun ApiXScreen(
                 resultSpec.onSuccess { spec ->
                     onSend(spec) { result ->
                         result.onSuccess { snapshot ->
-                            response = snapshot.asDisplayText()
+                            response = "HTTP ${snapshot.statusCode} ${snapshot.reason} · ${snapshot.durationMs} ms"
+                            responseBody = snapshot.body
+                            responseHeaders = snapshot.headers.joinToString("\n") { (name, value) -> "$name: $value" }
+                            responseFinalUrl = snapshot.finalUrl
+                            responseTab = "body"
+                            responseSearch = ""
                             repository.recordHistory(
                                 if (requestMode == "graphql") "POST" else method, url, snapshot.statusCode, snapshot.durationMs,
                                 snapshot.body.toByteArray().size.toLong()
@@ -525,11 +536,17 @@ private fun ApiXScreen(
                             history = repository.history(8)
                         }.onFailure { error ->
                             response = "خطا: ${error.message ?: error.javaClass.simpleName}"
+                            responseBody = response
+                            responseHeaders = ""
+                            responseFinalUrl = ""
                         }
                         loading = false
                     }
                 }.onFailure { error ->
                     response = "خطا: ${error.message}"
+                    responseBody = response
+                    responseHeaders = ""
+                    responseFinalUrl = ""
                     loading = false
                 }
             },
@@ -600,13 +617,69 @@ private fun ApiXScreen(
             )
         }
 
-        Text("پاسخ سرور", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("Response Inspector", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(response, style = MaterialTheme.typography.bodySmall)
+        if (responseFinalUrl.isNotBlank()) {
+            Text(responseFinalUrl, style = MaterialTheme.typography.bodySmall)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { responseTab = "body" }, modifier = Modifier.weight(1f)) {
+                Text(if (responseTab == "body") "✓ Body" else "Body")
+            }
+            OutlinedButton(onClick = { responseTab = "headers" }, modifier = Modifier.weight(1f)) {
+                Text(if (responseTab == "headers") "✓ Headers" else "Headers")
+            }
+        }
+        if (responseTab == "body") {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { prettyResponseJson = !prettyResponseJson }, modifier = Modifier.weight(1f)) {
+                    Text(if (prettyResponseJson) "Pretty JSON" else "Raw")
+                }
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ApiX response", responseBody.ifBlank { response }))
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Copy Body") }
+            }
+        } else {
+            OutlinedButton(
+                onClick = {
+                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("ApiX response headers", responseHeaders))
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Copy Headers") }
+        }
+        OutlinedTextField(
+            value = responseSearch, onValueChange = { responseSearch = it },
+            modifier = Modifier.fillMaxWidth(), singleLine = true,
+            label = { Text("جستجو در پاسخ") }
+        )
+        val renderedResponseBody = if (prettyResponseJson && responseBody.isNotBlank()) {
+            runCatching { JSONObject(responseBody).toString(2) }.getOrElse {
+                runCatching { JSONArray(responseBody).toString(2) }.getOrDefault(responseBody)
+            }
+        } else responseBody
+        val activeResponseText = if (responseTab == "body") renderedResponseBody.ifBlank { response } else responseHeaders
+        val responseMatches = if (responseSearch.isBlank()) 0 else {
+            Regex(Regex.escape(responseSearch), RegexOption.IGNORE_CASE).findAll(activeResponseText).count()
+        }
+        if (responseSearch.isNotBlank()) {
+            Text("$responseMatches مورد پیدا شد", style = MaterialTheme.typography.bodySmall)
+        }
         Surface(
             modifier = Modifier.fillMaxWidth(),
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = MaterialTheme.shapes.medium
         ) {
-            Text(response, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+            Text(
+                if (responseSearch.isBlank()) activeResponseText else activeResponseText.lines()
+                    .filter { it.contains(responseSearch, true) }.joinToString("\n"),
+                modifier = Modifier.padding(12.dp),
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }
