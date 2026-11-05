@@ -97,6 +97,24 @@ class MainActivity : Activity() {
     }
 
     inner class Bridge {
+        @JavascriptInterface fun shouldImportLegacyStorage(): Boolean {
+            val db = storageDb
+            db.execSQL("CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)")
+            db.rawQuery("SELECT value FROM app_meta WHERE key='legacy_imported' LIMIT 1", null).use { cursor ->
+                if (cursor.moveToFirst() && cursor.getString(0) == "1") return false
+            }
+            db.rawQuery("SELECT COUNT(*) FROM kv", null).use { cursor ->
+                return cursor.moveToFirst() && cursor.getLong(0) == 0L
+            }
+        }
+
+        @JavascriptInterface fun markLegacyStorageImported() {
+            val db = storageDb
+            db.execSQL("CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)")
+            val values = android.content.ContentValues().apply { put("key", "legacy_imported"); put("value", "1") }
+            db.insertWithOnConflict("app_meta", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE)
+        }
+
         @JavascriptInterface fun getStorageSnapshot(): String {
             val rows = JSONArray()
             storageDb.rawQuery("SELECT key, value FROM kv", null).use { cursor ->
@@ -899,6 +917,7 @@ class MainActivity : Activity() {
                 } finally { source.close() }
                 val count = replaceStorageSnapshot(records.toString())
                 cookieJar.importJson(cookiesJson)
+                markLegacyStorageImported()
                 pendingSqliteRestoreFile = null
                 file.delete()
                 JSONObject().put("ok", true).put("count", count).put("folders", folderCount)
