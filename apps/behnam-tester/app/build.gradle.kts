@@ -3,17 +3,17 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 android {
-    namespace = "com.behnamghafari.tester"
+    namespace = "ir.behnamghafari.apitester"
     compileSdk = 35
     buildFeatures {
         buildConfig = true
     }
     defaultConfig {
-        applicationId = "com.behnamghafari.tester"
+        applicationId = "ir.behnamghafari.apitester"
         minSdk = 23
         targetSdk = 35
-        versionCode = 39
-        versionName = "1.22.1"
+        versionCode = 40
+        versionName = "1.23.0"
     }
     signingConfigs {
         create("stableDebug") {
