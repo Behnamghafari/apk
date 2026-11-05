@@ -3,6 +3,7 @@ const sync=(action,...args)=>ipcRenderer.sendSync('apix:sync',action,...args);
 const invoke=(action,...args)=>ipcRenderer.invoke('apix:action',action,...args);
 const api={
   shouldImportLegacyStorage:()=>sync('shouldImportLegacyStorage'),
+  markLegacyStorageImported:()=>sync('markLegacyStorageImported'),
   getStorageSnapshot:()=>sync('getStorageSnapshot')||'[]',
   setStorageValue:(...a)=>sync('setStorageValue',...a),
   getCookies:()=>sync('getCookies')||'[]',
