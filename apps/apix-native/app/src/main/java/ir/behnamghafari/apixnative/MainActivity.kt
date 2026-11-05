@@ -640,6 +640,9 @@ private fun ApiXScreen(
                     bodyType = "none"
                     requestName = ""
                     response = "درخواست از تاریخچه بارگذاری شد."
+                    responseBody = ""
+                    responseHeaders = ""
+                    responseFinalUrl = ""
                 }) { Text("بازکردن") }
                 OutlinedButton(onClick = {
                     repository.deleteHistory(item.id)
