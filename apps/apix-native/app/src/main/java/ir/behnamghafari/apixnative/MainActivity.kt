@@ -17,7 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DarkColorScheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -43,7 +43,7 @@ import okio.Buffer
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-private val ApiXColors: DarkColorScheme = darkColorScheme()
+private val ApiXColors: ColorScheme = darkColorScheme()
 
 class MainActivity : ComponentActivity() {
     private val networkExecutor = Executors.newSingleThreadExecutor()
