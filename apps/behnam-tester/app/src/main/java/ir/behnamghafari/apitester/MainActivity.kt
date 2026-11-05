@@ -35,6 +35,7 @@ class MainActivity : Activity() {
     private val backupSaveRequestCode = 4813
     private val backupRestoreRequestCode = 4814
     private val jsonImportRequestCode = 4815
+    private val openApiImportRequestCode = 4818
     private val sqliteBackupSaveRequestCode = 4816
     private val sqliteBackupRestoreRequestCode = 4817
     @Volatile private var pendingJsonImportType: String = ""
@@ -943,6 +944,24 @@ class MainActivity : Activity() {
                 }
             }
         }
+        @JavascriptInterface fun chooseOpenApiFile() {
+            runOnUiThread {
+                try {
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                        putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                            "application/json", "text/json", "application/yaml",
+                            "text/yaml", "application/x-yaml", "text/plain",
+                            "application/octet-stream"
+                        ))
+                    }
+                    startActivityForResult(intent, openApiImportRequestCode)
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "انتخاب فایل Swagger ممکن نیست: " + e.message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         @JavascriptInterface fun chooseUploadFiles() {
             runOnUiThread {
                 try {
@@ -1225,6 +1244,28 @@ class MainActivity : Activity() {
                     )
                 } catch (e: Exception) {
                     Toast.makeText(this, "خواندن فایل ناموفق بود: " + e.message, Toast.LENGTH_LONG).show()
+                }
+            }
+            return
+        }
+        if (requestCode == openApiImportRequestCode) {
+            if (resultCode == RESULT_OK && data?.data != null) {
+                try {
+                    val uri = data.data!!
+                    val raw = contentResolver.openInputStream(uri)?.use { input ->
+                        val bytes = input.readBytes()
+                        require(bytes.size <= 20 * 1024 * 1024) { "OpenAPI file is larger than 20 MB" }
+                        String(bytes, Charsets.UTF_8)
+                    } ?: throw IllegalStateException("Cannot read selected OpenAPI file")
+                    val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) cursor.getString(0) ?: "OpenAPI file" else "OpenAPI file"
+                    } ?: "OpenAPI file"
+                    if (::web.isInitialized) web.evaluateJavascript(
+                        "window.onOpenApiFileSelected && window.onOpenApiFileSelected(" +
+                            JSONObject.quote(raw) + "," + JSONObject.quote(name) + ")", null
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(this, "خواندن فایل Swagger ناموفق بود: " + e.message, Toast.LENGTH_LONG).show()
                 }
             }
             return
