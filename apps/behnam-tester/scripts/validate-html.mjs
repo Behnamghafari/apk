@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const html = readFileSync(resolve(root, 'app/src/main/assets/tester.html'), 'utf8');
+const kotlin = readFileSync(resolve(root, 'app/src/main/java/com/behnamghafari/tester/MainActivity.kt'), 'utf8');
 const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]);
 
 function assert(condition, message) {
@@ -32,5 +33,13 @@ assert(html.includes("if(mode==='graphql')sendGraphQL();else sendRequest()"), 'G
 assert(html.includes("const mode=x.mode||x.req.mode||'rest'"), 'Saved request mode restoration is missing');
 assert(html.includes("r.id!==$('pendingId').value"), 'Stale response protection is missing');
 assert(html.includes("x.req?.mode!=='websocket'"), 'WebSocket requests must be excluded from REST collection runs');
+
+
+assert(html.includes("req:{method,url,allowScripts:true,params:[]"), 'Built-in sample assertions must remain enabled');
+assert(html.includes("wsHistory=wsHistory.slice(0,200)"), 'WebSocket history count must be bounded');
+assert(html.includes("const maxChars=32*1024"), 'WebSocket history payloads must be bounded');
+assert(kotlin.includes('val maxChars = 32 * 1024'), 'Native WebSocket message forwarding must be bounded');
+assert(kotlin.includes('val completedInTime = latch.await(180, TimeUnit.SECONDS)'), 'Load test timeout state must be recorded');
+assert(kotlin.includes('.put("notCompleted", notCompleted)'), 'Load test incomplete requests must be reported');
 
 console.log('ApiX static validation passed: ' + scripts.length + ' JavaScript block, ' + ids.length + ' unique HTML IDs, no external runtime assets, and release-critical safety checks.');
