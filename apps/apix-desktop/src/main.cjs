@@ -11,7 +11,25 @@ const sockets = new Map();
 const MAX_RESPONSE = 5 * 1024 * 1024;
 
 function emit(name, payload) {
-  if (win && !win.isDestroyed()) win.webContents.send('apix:event', { name, payload });
+  if (!win || win.isDestroyed()) return;
+  const value = JSON.stringify(payload);
+  const callbacks = {
+    onResult: `window.BehnamTester && window.BehnamTester.onResult && window.BehnamTester.onResult(${value})`,
+    onWebSocketEvent: `window.BehnamTester && window.BehnamTester.onWebSocketEvent && window.BehnamTester.onWebSocketEvent(${value})`,
+    onOpenApiFileSelected: `window.onOpenApiFileSelected && window.onOpenApiFileSelected(${JSON.stringify(payload.raw)}, ${JSON.stringify(payload.name)})`,
+    onJsonFileSelected: `window.onJsonFileSelected && window.onJsonFileSelected(${JSON.stringify(payload.type)}, ${JSON.stringify(payload.raw)})`,
+    onBackupFileSelected: `window.onBackupFileSelected && window.onBackupFileSelected(${value})`,
+    onBackupSaved: `window.onBackupSaved && window.onBackupSaved(${value})`,
+    onSqliteBackupSelected: `window.onSqliteBackupSelected && window.onSqliteBackupSelected(${value})`,
+    onUploadFilesSelected: `window.BehnamTester && window.BehnamTester.onUploadFilesSelected && window.BehnamTester.onUploadFilesSelected(${value})`,
+    onUploadResult: `window.BehnamTester && window.BehnamTester.onUploadResult && window.BehnamTester.onUploadResult(${value})`,
+    onSecurityAuditResult: `window.BehnamTester && window.BehnamTester.onSecurityAuditResult && window.BehnamTester.onSecurityAuditResult(${value})`,
+    onMonitorResult: `window.BehnamTester && window.BehnamTester.onMonitorResult && window.BehnamTester.onMonitorResult(${value})`,
+    onLoadTestResult: `window.BehnamTester && window.BehnamTester.onLoadTestResult && window.BehnamTester.onLoadTestResult(${value})`,
+    toast: `console.info('[ApiX]', ${value})`
+  };
+  const script = callbacks[name];
+  if (script) win.webContents.executeJavaScript(script).catch(err => console.error('ApiX callback', name, err));
 }
 function initDb() {
   const file = path.join(app.getPath('userData'), 'apix.sqlite');
@@ -70,8 +88,8 @@ ipcMain.handle('apix:action', async (_event, action, ...args) => {
     const res = await dialog.showOpenDialog(win,{properties:['openFile'],filters:[{name:'API definition and data',extensions:['json','yaml','yml','txt','*']}]});
     if (!res.canceled && res.filePaths[0]) {
       const raw=fs.readFileSync(res.filePaths[0],'utf8');
-      if (action==='chooseOpenApiFile') emit('onOpenApiFileSelected',raw,path.basename(res.filePaths[0]));
-      else if (action==='chooseJsonFile') emit('onJsonFileSelected',args[0],raw);
+      if (action==='chooseOpenApiFile') emit('onOpenApiFileSelected',{raw,name:path.basename(res.filePaths[0])});
+      else if (action==='chooseJsonFile') emit('onJsonFileSelected',{type:args[0],raw});
       else emit('onBackupFileSelected',raw);
     } return !res.canceled;
   }
