@@ -783,6 +783,7 @@ class MainActivity : Activity() {
                     val outputDb = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(backup, null)
                     try {
                         outputDb.execSQL("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)")
+                        outputDb.execSQL("CREATE TABLE IF NOT EXISTS app_data (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)")
                         outputDb.execSQL("CREATE TABLE IF NOT EXISTS apix_backup_meta (format TEXT NOT NULL, version INTEGER NOT NULL, created_at TEXT NOT NULL)")
                         outputDb.beginTransaction()
                         try {
@@ -795,6 +796,8 @@ class MainActivity : Activity() {
                                     outputDb.insertOrThrow("kv", null, values)
                                 }
                             }
+                            val appData = android.content.ContentValues().apply { put("key", "cookies"); put("value", cookieJar.exportJson().toString()) }
+                            outputDb.insertOrThrow("app_data", null, appData)
                             val meta = android.content.ContentValues().apply {
                                 put("format", "apix-sqlite-backup")
                                 put("version", 1)
@@ -852,6 +855,7 @@ class MainActivity : Activity() {
                 val records = JSONArray()
                 var folderCount = 0
                 var collectionCount = 0
+                var cookiesJson = "[]"
                 try {
                     source.rawQuery("SELECT format, version FROM apix_backup_meta LIMIT 1", null).use { cursor ->
                         require(cursor.moveToFirst() && cursor.getString(0) == "apix-sqlite-backup" && cursor.getInt(1) == 1) { "فرمت یا نسخه فایل SQLite پشتیبانی نمی‌شود" }
@@ -869,8 +873,13 @@ class MainActivity : Activity() {
                             require(records.length() <= 5000) { "تعداد رکوردهای بکاپ بیش از حد مجاز است" }
                         }
                     }
+                    source.rawQuery("SELECT value FROM app_data WHERE key='cookies' LIMIT 1", null).use { cursor ->
+                        if (cursor.moveToFirst()) cookiesJson = cursor.getString(0)
+                    }
+                    org.json.JSONArray(cookiesJson)
                 } finally { source.close() }
                 val count = replaceStorageSnapshot(records.toString())
+                cookieJar.importJson(cookiesJson)
                 pendingSqliteRestoreFile = null
                 file.delete()
                 JSONObject().put("ok", true).put("count", count).put("folders", folderCount)
@@ -1274,6 +1283,27 @@ private class PersistentCookieJar(private val preferences: SharedPreferences) : 
     fun clear() = synchronized(lock) {
         cookies.clear()
         persistLocked()
+    }
+
+    fun importJson(raw: String) {
+        val incoming = JSONArray(raw)
+        synchronized(lock) {
+            cookies.clear()
+            for (i in 0 until incoming.length()) {
+                val item = incoming.optJSONObject(i) ?: continue
+                try {
+                    val builder = Cookie.Builder().name(item.getString("name")).value(item.getString("value"))
+                        .path(item.optString("path", "/")).expiresAt(item.optLong("expiresAt", Long.MAX_VALUE))
+                    val domain = item.getString("domain")
+                    if (item.optBoolean("hostOnly", false)) builder.hostOnlyDomain(domain) else builder.domain(domain)
+                    if (item.optBoolean("secure")) builder.secure()
+                    if (item.optBoolean("httpOnly")) builder.httpOnly()
+                    val cookie = builder.build()
+                    if (cookie.expiresAt > System.currentTimeMillis()) cookies.add(cookie)
+                } catch (_: Exception) { }
+            }
+            persistLocked()
+        }
     }
 
     fun exportJson(): JSONArray = synchronized(lock) {
