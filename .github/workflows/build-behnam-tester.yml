@@ -56,7 +56,11 @@ jobs:
           KEYSTORE_PATH="$RUNNER_TEMP/apix-production.jks"
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
-          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/keystore-validation-error.txt"; then
+            echo "::error::Production keystore validation failed. The Base64 file, keystore password, or alias may be incorrect."
+            sed -E 's/(password|storepass)[^[:cntrl:]]*/\\1 [REDACTED]/Ig' "$RUNNER_TEMP/keystore-validation-error.txt"
+            exit 1
+          fi
           echo "ANDROID_KEYSTORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
           echo "ANDROID_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
           echo "ANDROID_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
