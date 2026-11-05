@@ -90,7 +90,7 @@ private fun ApiXScreen(
     val authTypes = listOf("none", "bearer", "basic", "apikey")
     val bodyTypes = listOf("none", "json", "raw", "form")
 
-    var curlInput by remember { mutableStateOf("") }
+    var requestMode by remember { mutableStateOf("rest") }\n    var graphQlQuery by remember { mutableStateOf("query {\\n  __typename\\n}") }\n    var graphQlVariables by remember { mutableStateOf("{}") }\n    var graphQlOperationName by remember { mutableStateOf("") }\n    var curlInput by remember { mutableStateOf("") }
     var method by remember { mutableStateOf("GET") }
     var methodMenuOpen by remember { mutableStateOf(false) }
     var url by remember { mutableStateOf("https://httpbin.org/get") }
@@ -195,6 +195,18 @@ private fun ApiXScreen(
         }
     }
 
+    fun effectiveBody(): String {
+        if (requestMode != "graphql") return body
+        val variables = activeVariables()
+        val variablesObject = JSONObject(resolveVariables(graphQlVariables, variables))
+        return JSONObject()
+            .put("query", resolveVariables(graphQlQuery, variables))
+            .put("variables", variablesObject)
+            .apply {
+                if (graphQlOperationName.isNotBlank()) put("operationName", graphQlOperationName.trim())
+            }.toString()
+    }
+
     fun restoreRequest(saved: SavedRequest) {
         method = saved.method
         url = saved.url
@@ -230,6 +242,15 @@ private fun ApiXScreen(
     ) {
         Text("ApiX", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Native API Client · Kotlin + Compose + OkHttp", style = MaterialTheme.typography.bodySmall)
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { requestMode = "rest" }, modifier = Modifier.weight(1f)) {
+                Text(if (requestMode == "rest") "✓ REST" else "REST")
+            }
+            OutlinedButton(onClick = { requestMode = "graphql"; method = "POST"; bodyType = "json" }, modifier = Modifier.weight(1f)) {
+                Text(if (requestMode == "graphql") "✓ GraphQL" else "GraphQL")
+            }
+        }
 
         Text("محیط‌ها (Environments)", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
@@ -374,6 +395,25 @@ private fun ApiXScreen(
             )
         }
 
+        if (requestMode == "graphql") {
+            Text("GraphQL Query", style = MaterialTheme.typography.titleSmall)
+            OutlinedTextField(
+                value = graphQlQuery, onValueChange = { graphQlQuery = it },
+                modifier = Modifier.fillMaxWidth(), minLines = 6,
+                label = { Text("Query / Mutation") }
+            )
+            OutlinedTextField(
+                value = graphQlOperationName, onValueChange = { graphQlOperationName = it },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text("Operation Name (اختیاری)") }
+            )
+            OutlinedTextField(
+                value = graphQlVariables, onValueChange = { graphQlVariables = it },
+                modifier = Modifier.fillMaxWidth(), minLines = 3,
+                label = { Text("Variables · JSON Object") }
+            )
+        }
+
         Text("Query Parameters · هر خط key=value", style = MaterialTheme.typography.titleSmall)
         OutlinedTextField(
             value = params, onValueChange = { params = it }, modifier = Modifier.fillMaxWidth(),
@@ -417,8 +457,7 @@ private fun ApiXScreen(
             }
         }
 
-        Text("Request Body", style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        if (requestMode == "rest") {\n        Text("Request Body", style = MaterialTheme.typography.titleSmall)\n        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             bodyTypes.forEach { type ->
                 OutlinedButton(onClick = { bodyType = type }) {
                     Text(if (bodyType == type) "✓ $type" else type)
@@ -432,8 +471,7 @@ private fun ApiXScreen(
             )
         }
 
-        Button(
-            onClick = {
+        }\n\n        Button(\n            onClick = {
                 loading = true
                 response = "در حال ارسال درخواست..."
                 val resultSpec = runCatching {
@@ -459,7 +497,7 @@ private fun ApiXScreen(
                         result.onSuccess { snapshot ->
                             response = snapshot.asDisplayText()
                             repository.recordHistory(
-                                method, url, snapshot.statusCode, snapshot.durationMs,
+                                if (requestMode == "graphql") "POST" else method, url, snapshot.statusCode, snapshot.durationMs,
                                 snapshot.body.toByteArray().size.toLong()
                             )
                             history = repository.history(8)
@@ -505,7 +543,7 @@ private fun ApiXScreen(
                             id = ir.behnamghafari.apixnative.data.local.ApiXDatabase.newId(),
                             name = requestName.ifBlank { "$method $url" },
                             method = method, url = url, headersJson = headersJson, paramsJson = paramsJson,
-                            body = body, bodyType = bodyType, authType = authType,
+                            body = effectiveBody(), bodyType = if (requestMode == "graphql") "json" else bodyType, authType = authType,
                             authConfigJson = authJson.toString(), folderId = selectedFolderId,
                             createdAt = now, updatedAt = now
                         )
