@@ -117,7 +117,7 @@ class HttpRequestEngine(
         }
 
         val startedAt = System.nanoTime()
-        client.newCall(builder.build()).execute().use { response ->
+        return client.newCall(builder.build()).execute().use { response ->
             val buffer = Buffer()
             val source = response.body?.source()
             val maxBytes = MAX_RESPONSE_BYTES
