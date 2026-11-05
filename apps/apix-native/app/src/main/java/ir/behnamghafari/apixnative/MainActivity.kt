@@ -202,7 +202,7 @@ private fun ApiXScreen(
     fun effectiveBody(): String {
         if (requestMode != "graphql") return body
         val variables = activeVariables()
-        val variablesObject = JSONObject(resolveVariables(graphQlVariables, variables))
+        require(graphQlQuery.isNotBlank()) { "متن GraphQL خالی است." }\n        val variablesObject = JSONObject(resolveVariables(graphQlVariables, variables))
         return JSONObject()
             .put("query", resolveVariables(graphQlQuery, variables))
             .put("variables", variablesObject)
