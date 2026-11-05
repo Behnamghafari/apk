@@ -35,9 +35,13 @@ class MainActivity : Activity() {
     private val backupSaveRequestCode = 4813
     private val backupRestoreRequestCode = 4814
     private val jsonImportRequestCode = 4815
+    private val sqliteBackupSaveRequestCode = 4816
+    private val sqliteBackupRestoreRequestCode = 4817
     @Volatile private var pendingJsonImportType: String = ""
     @Volatile private var pendingBackupJson: String? = null
     @Volatile private var pendingBackupName: String = "apix-backup.json"
+    @Volatile private var pendingSqliteBackupFile: java.io.File? = null
+    @Volatile private var pendingSqliteRestoreFile: java.io.File? = null
     private lateinit var cookieJar: PersistentCookieJar
     private lateinit var client: OkHttpClient
     @Volatile private var mockServer: ServerSocket? = null
@@ -120,11 +124,20 @@ class MainActivity : Activity() {
                     val record = records.optJSONObject(i) ?: continue
                     val key = record.optString("key")
                     if (!key.startsWith("bt_") || key.length > 160) continue
-                    val values = android.content.ContentValues().apply {
-                        put("key", key)
-                        put("value", JSONArray().put(record.opt("value")).toString().let { it.substring(1, it.length - 1) })
-                    }
-                    if (db.insertWithOnConflict("kv", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE) != -1L) imported++
+                    val encoded = JSONObject().put("v", record.opt("value")).getString("v")
+                    val values = android.content.ContentValues().apply { put("key", key); put("value", encoded) }
+                    val isImportantList = key == "bt_folders" || key == "bt_collections"
+                    val shouldRepairEmptyList = if (isImportantList) {
+                        db.rawQuery("SELECT value FROM kv WHERE key=?", arrayOf(key)).use { cursor ->
+                            if (!cursor.moveToFirst()) true else {
+                                val existing = try { JSONArray(cursor.getString(0)) } catch (_: Exception) { JSONArray() }
+                                val incoming = try { JSONArray(encoded) } catch (_: Exception) { JSONArray() }
+                                existing.length() == 0 && incoming.length() > 0
+                            }
+                        }
+                    } else false
+                    val conflict = if (shouldRepairEmptyList) android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE else android.database.sqlite.SQLiteDatabase.CONFLICT_IGNORE
+                    if (db.insertWithOnConflict("kv", null, values, conflict) != -1L) imported++
                 }
                 db.setTransactionSuccessful()
             } finally { db.endTransaction() }
@@ -760,6 +773,111 @@ class MainActivity : Activity() {
                 }
             }
         }
+
+        @JavascriptInterface fun createSqliteBackup() {
+            Thread {
+                var backup: java.io.File? = null
+                try {
+                    backup = java.io.File(cacheDir, "apix-full-backup-${System.currentTimeMillis()}.db")
+                    if (backup.exists()) backup.delete()
+                    val outputDb = android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(backup, null)
+                    try {
+                        outputDb.execSQL("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL)")
+                        outputDb.execSQL("CREATE TABLE IF NOT EXISTS apix_backup_meta (format TEXT NOT NULL, version INTEGER NOT NULL, created_at TEXT NOT NULL)")
+                        outputDb.beginTransaction()
+                        try {
+                            storageDb.rawQuery("SELECT key, value FROM kv ORDER BY key", null).use { cursor ->
+                                while (cursor.moveToNext()) {
+                                    val values = android.content.ContentValues().apply {
+                                        put("key", cursor.getString(0))
+                                        put("value", cursor.getString(1))
+                                    }
+                                    outputDb.insertOrThrow("kv", null, values)
+                                }
+                            }
+                            val meta = android.content.ContentValues().apply {
+                                put("format", "apix-sqlite-backup")
+                                put("version", 1)
+                                put("created_at", java.time.Instant.now().toString())
+                            }
+                            outputDb.insertOrThrow("apix_backup_meta", null, meta)
+                            outputDb.setTransactionSuccessful()
+                        } finally { outputDb.endTransaction() }
+                    } finally { outputDb.close() }
+                    runOnUiThread {
+                        try {
+                            pendingSqliteBackupFile = backup
+                            val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                addCategory(Intent.CATEGORY_OPENABLE)
+                                type = "application/vnd.sqlite3"
+                                putExtra(Intent.EXTRA_TITLE, backup.name)
+                            }
+                            startActivityForResult(intent, sqliteBackupSaveRequestCode)
+                        } catch (e: Exception) {
+                            pendingSqliteBackupFile = null
+                            backup.delete()
+                            Toast.makeText(this@MainActivity, "باز کردن محل ذخیره بکاپ SQLite ممکن نیست: " + e.message, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    backup?.delete()
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "ساخت بکاپ SQLite ناموفق بود: " + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
+                        if (::web.isInitialized) web.evaluateJavascript("window.onBackupSaved && window.onBackupSaved('{\\"ok\\":false}')", null)
+                    }
+                }
+            }.start()
+        }
+
+        @JavascriptInterface fun chooseSqliteBackupFile() {
+            runOnUiThread {
+                try {
+                    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                        putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/vnd.sqlite3", "application/x-sqlite3", "application/octet-stream"))
+                    }
+                    startActivityForResult(intent, sqliteBackupRestoreRequestCode)
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "انتخاب فایل SQLite ممکن نیست: " + e.message, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        @JavascriptInterface fun restoreSqliteBackup(): String {
+            return try {
+                val file = pendingSqliteRestoreFile ?: throw IllegalStateException("ابتدا فایل بکاپ را انتخاب کن")
+                val source = android.database.sqlite.SQLiteDatabase.openDatabase(file.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+                val records = JSONArray()
+                var folderCount = 0
+                var collectionCount = 0
+                try {
+                    source.rawQuery("SELECT format, version FROM apix_backup_meta LIMIT 1", null).use { cursor ->
+                        require(cursor.moveToFirst() && cursor.getString(0) == "apix-sqlite-backup" && cursor.getInt(1) == 1) { "فرمت یا نسخه فایل SQLite پشتیبانی نمی‌شود" }
+                    }
+                    source.rawQuery("SELECT key, value FROM kv ORDER BY key", null).use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val key = cursor.getString(0)
+                            val encoded = cursor.getString(1)
+                            require(key.startsWith("bt_") && key.length <= 160) { "کلید نامعتبر در فایل بکاپ" }
+                            require(encoded.length <= 8 * 1024 * 1024) { "یکی از رکوردهای بکاپ بیش از حد بزرگ است" }
+                            val value = org.json.JSONTokener(encoded).nextValue()
+                            records.put(JSONObject().put("key", key).put("value", value))
+                            if (key == "bt_folders" && value is JSONArray) folderCount = value.length()
+                            if (key == "bt_collections" && value is JSONArray) collectionCount = value.length()
+                            require(records.length() <= 5000) { "تعداد رکوردهای بکاپ بیش از حد مجاز است" }
+                        }
+                    }
+                } finally { source.close() }
+                val count = replaceStorageSnapshot(records.toString())
+                pendingSqliteRestoreFile = null
+                file.delete()
+                JSONObject().put("ok", true).put("count", count).put("folders", folderCount)
+                    .put("collections", collectionCount).put("snapshot", JSONArray(getStorageSnapshot())).toString()
+            } catch (e: Exception) {
+                JSONObject().put("ok", false).put("error", e.message ?: e.javaClass.simpleName).toString()
+            }
+        }
         @JavascriptInterface fun chooseJsonFile(importType: String) {
             runOnUiThread {
                 try {
@@ -956,6 +1074,59 @@ class MainActivity : Activity() {
                 }
             } else {
                 Toast.makeText(this, "ذخیره بکاپ لغو شد", Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        if (requestCode == sqliteBackupSaveRequestCode) {
+            val file = pendingSqliteBackupFile
+            pendingSqliteBackupFile = null
+            if (resultCode == RESULT_OK && data?.data != null && file != null) {
+                try {
+                    contentResolver.openOutputStream(data.data!!, "wt")?.use { output -> file.inputStream().use { input -> input.copyTo(output) } }
+                        ?: throw IllegalStateException("Cannot open SQLite backup destination")
+                    val result = JSONObject().put("ok", true).put("name", file.name).put("path", data.data.toString())
+                    if (::web.isInitialized) web.evaluateJavascript("window.onBackupSaved && window.onBackupSaved(" + JSONObject.quote(result.toString()) + ")", null)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "ذخیره فایل SQLite ناموفق بود: " + e.message, Toast.LENGTH_LONG).show()
+                    if (::web.isInitialized) web.evaluateJavascript("window.onBackupSaved && window.onBackupSaved('{\\"ok\\":false}')", null)
+                } finally { file.delete() }
+            } else { file?.delete() }
+            return
+        }
+        if (requestCode == sqliteBackupRestoreRequestCode) {
+            if (resultCode == RESULT_OK && data?.data != null) {
+                try {
+                    val file = java.io.File(cacheDir, "apix-restore-${System.currentTimeMillis()}.db")
+                    contentResolver.openInputStream(data.data!!)?.use { input -> file.outputStream().use { output -> input.copyTo(output) } }
+                        ?: throw IllegalStateException("Cannot read SQLite backup file")
+                    require(file.length() in 1..(128L * 1024L * 1024L)) { "SQLite backup file size is invalid or exceeds 128 MB" }
+                    val source = android.database.sqlite.SQLiteDatabase.openDatabase(file.absolutePath, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY)
+                    var count = 0
+                    var folders = 0
+                    var collections = 0
+                    try {
+                        source.rawQuery("SELECT format, version FROM apix_backup_meta LIMIT 1", null).use { cursor ->
+                            require(cursor.moveToFirst() && cursor.getString(0) == "apix-sqlite-backup" && cursor.getInt(1) == 1) { "این فایل بکاپ SQLite معتبر ApiX نیست" }
+                        }
+                        source.rawQuery("SELECT key, value FROM kv", null).use { cursor ->
+                            while (cursor.moveToNext()) {
+                                val key = cursor.getString(0)
+                                require(key.startsWith("bt_") && key.length <= 160) { "کلید نامعتبر در فایل بکاپ" }
+                                val value = org.json.JSONTokener(cursor.getString(1)).nextValue()
+                                if (key == "bt_folders" && value is JSONArray) folders = value.length()
+                                if (key == "bt_collections" && value is JSONArray) collections = value.length()
+                                count++
+                                require(count <= 5000) { "تعداد رکوردهای بکاپ بیش از حد مجاز است" }
+                            }
+                        }
+                    } finally { source.close() }
+                    pendingSqliteRestoreFile?.delete()
+                    pendingSqliteRestoreFile = file
+                    val summary = JSONObject().put("count", count).put("folders", folders).put("collections", collections)
+                    if (::web.isInitialized) web.evaluateJavascript("window.onSqliteBackupSelected && window.onSqliteBackupSelected(" + JSONObject.quote(summary.toString()) + ")", null)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "فایل SQLite قابل بازیابی نیست: " + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
+                }
             }
             return
         }
