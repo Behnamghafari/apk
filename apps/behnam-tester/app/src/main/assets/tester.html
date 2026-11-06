@@ -948,7 +948,7 @@ function setMode(mode){
  $('method').classList.toggle('hide',ws||gql);$('sendBtn').classList.toggle('hide',ws||gql);
  $('requestActions').classList.toggle('hide',ws);$('requestTabs').classList.toggle('hide',ws);
  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('hide',ws));
- $('responseBox').classList.toggle('hide',ws);$('historySection').classList.toggle('hide',ws);$('historyList').classList.toggle('hide',ws);
+ $('responseBox').classList.toggle('hide',ws);if($('historySection'))$('historySection').classList.toggle('hide',ws);if($('historyList'))$('historyList').classList.toggle('hide',ws);
  $('wsArea').classList.toggle('hide',!ws);$('graphqlArea').classList.toggle('hide',!gql);
  if(mode==='graphql'){
   $('method').value='POST';bodyMode='json';
